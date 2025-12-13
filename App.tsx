@@ -1,19 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Reader } from './components/Reader';
-import { Button } from './components/Button';
-import { BookOpen, Edit3, Sparkles, Settings, KeyRound } from 'lucide-react';
-import { ViewMode } from './types';
+import { BookOpen, Edit3, KeyRound, Settings, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { ApiKeyModal } from './components/ApiKeyModal';
+import { Button } from './components/Button';
+import { Reader } from './components/Reader';
+import { ViewMode } from './types';
 
 // Default placeholder text
 const DEFAULT_TEXT = `The quick brown fox jumps over the lazy dog. 
 
 Learning a new language is a journey of discovery. Every word you learn unlocks a new way of thinking and perceiving the world around you. Don't be afraid to make mistakes; they are the stepping stones to fluency.`;
 
+const STORAGE_KEY_TEXT = 'vocabflow_input_text';
+
 export default function App() {
-  const [text, setText] = useState<string>(DEFAULT_TEXT);
+  const [text, setText] = useState<string>(() => {
+    const cached = localStorage.getItem(STORAGE_KEY_TEXT);
+    return cached || DEFAULT_TEXT;
+  });
   const [mode, setMode] = useState<ViewMode>('read');
-  const [inputText, setInputText] = useState<string>(DEFAULT_TEXT);
+  const [inputText, setInputText] = useState<string>(() => {
+    const cached = localStorage.getItem(STORAGE_KEY_TEXT);
+    return cached || DEFAULT_TEXT;
+  });
   
   // API Key State
   const [apiKey, setApiKey] = useState<string>('');
@@ -37,6 +45,7 @@ export default function App() {
 
   const handleSaveText = () => {
     setText(inputText);
+    localStorage.setItem(STORAGE_KEY_TEXT, inputText);
     setMode('read');
   };
 
