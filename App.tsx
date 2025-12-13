@@ -1,9 +1,35 @@
-import { BookOpen, Edit3, KeyRound, Settings, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { BookOpen, Edit3, KeyRound, Link, Settings, Sparkles, Check } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { Button } from './components/Button';
 import { Reader } from './components/Reader';
 import { ViewMode } from './types';
+
+// Compress text using base64 encoding (works for most text)
+const encodeTextForUrl = (text: string): string => {
+  try {
+    // Use encodeURIComponent to handle unicode, then base64 encode
+    const encoded = btoa(encodeURIComponent(text).replace(/%([0-9A-F]{2})/g,
+      (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+    return encoded;
+  } catch {
+    return '';
+  }
+};
+
+const decodeTextFromUrl = (encoded: string): string | null => {
+  try {
+    // Decode base64, then decodeURIComponent to restore unicode
+    const decoded = decodeURIComponent(
+      atob(encoded).split('').map(c =>
+        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+      ).join('')
+    );
+    return decoded;
+  } catch {
+    return null;
+  }
+};
 
 // Default placeholder text
 const DEFAULT_TEXT = `The quick brown fox jumps over the lazy dog. 
@@ -13,19 +39,57 @@ Learning a new language is a journey of discovery. Every word you learn unlocks 
 const STORAGE_KEY_TEXT = 'vocabflow_input_text';
 
 export default function App() {
+  // Track if text came from URL (should not be saved to localStorage)
+  const [isFromUrl, setIsFromUrl] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   const [text, setText] = useState<string>(() => {
+    // Check URL parameter first
+    const urlParams = new URLSearchParams(window.location.search);
+    const textParam = urlParams.get('t');
+    if (textParam) {
+      const decoded = decodeTextFromUrl(textParam);
+      if (decoded) {
+        return decoded;
+      }
+    }
+    // Fall back to localStorage
     const cached = localStorage.getItem(STORAGE_KEY_TEXT);
     return cached || DEFAULT_TEXT;
   });
   const [mode, setMode] = useState<ViewMode>('read');
   const [inputText, setInputText] = useState<string>(() => {
+    // Check URL parameter first
+    const urlParams = new URLSearchParams(window.location.search);
+    const textParam = urlParams.get('t');
+    if (textParam) {
+      const decoded = decodeTextFromUrl(textParam);
+      if (decoded) {
+        return decoded;
+      }
+    }
+    // Fall back to localStorage
     const cached = localStorage.getItem(STORAGE_KEY_TEXT);
     return cached || DEFAULT_TEXT;
   });
-  
+
   // API Key State
   const [apiKey, setApiKey] = useState<string>('');
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+
+  // Check if text came from URL on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const textParam = urlParams.get('t');
+    if (textParam) {
+      const decoded = decodeTextFromUrl(textParam);
+      if (decoded) {
+        setIsFromUrl(true);
+        // Clear URL parameter after reading (optional, keeps URL clean)
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
 
   // Load key from localStorage on mount
   useEffect(() => {
@@ -38,6 +102,23 @@ export default function App() {
     }
   }, []);
 
+  // Create share link
+  const handleCreateLink = useCallback(async () => {
+    const encoded = encodeTextForUrl(text);
+    if (!encoded) return;
+
+    const url = `${window.location.origin}${window.location.pathname}?t=${encoded}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      // Fallback: show alert with URL
+      prompt('Copy this link:', url);
+    }
+  }, [text]);
+
   const handleSaveKey = (key: string) => {
     localStorage.setItem('gemini_api_key', key);
     setApiKey(key);
@@ -45,7 +126,11 @@ export default function App() {
 
   const handleSaveText = () => {
     setText(inputText);
-    localStorage.setItem(STORAGE_KEY_TEXT, inputText);
+    // Only save to localStorage if not from URL, or user explicitly edited
+    if (!isFromUrl) {
+      localStorage.setItem(STORAGE_KEY_TEXT, inputText);
+    }
+    setIsFromUrl(false); // After saving, treat as local content
     setMode('read');
   };
 
@@ -73,13 +158,28 @@ export default function App() {
           
           <div className="flex items-center space-x-3">
              {/* API Key Button */}
-             <button 
+             <button
                 onClick={() => setIsKeyModalOpen(true)}
                 className={`p-2 rounded-full transition-colors ${!apiKey ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-slate-500 hover:bg-slate-100'}`}
                 title="Configure API Key"
              >
                 {!apiKey ? <KeyRound size={20} className="animate-pulse" /> : <Settings size={20} />}
              </button>
+
+             {/* Create Link Button */}
+             {mode === 'read' && (
+               <button
+                 onClick={handleCreateLink}
+                 className={`p-2 rounded-full transition-colors flex items-center gap-1.5 ${
+                   linkCopied
+                     ? 'bg-green-100 text-green-600'
+                     : 'text-slate-500 hover:bg-slate-100'
+                 }`}
+                 title={linkCopied ? 'Link Copied!' : 'Create Share Link'}
+               >
+                 {linkCopied ? <Check size={20} /> : <Link size={20} />}
+               </button>
+             )}
 
              <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
