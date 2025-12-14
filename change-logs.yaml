@@ -3,6 +3,65 @@ description: An AI-powered English reading application with vocabulary learning 
 repository: 0xleizhang/vocabflow2
 
 changelog:
+  - version: 0.9.0
+    date: 2025-12-15
+    commit: pending
+    author: Lei Zhang
+    type: feature
+    summary: Added text history tracking, AI text generation, and enhanced explore page
+    changes:
+      - area: Text History System
+        description: Implemented independent history tracking for practice texts
+        improvements:
+          - Added new localStorage key 'philingo_text_history' separate from current text storage
+          - Automatically saves pasted texts to history when user starts reading
+          - History entries include full text, timestamp, and preview
+          - Prevents duplicate entries by updating timestamp for existing texts
+          - Maintains up to 50 most recent history entries
+          - History excludes default placeholder text
+
+      - area: Explore Page - History Section
+        description: Added history display and management features
+        improvements:
+          - Created "Your History" section showing all saved practice texts
+          - Each history card displays date, preview, and word count
+          - Added expandable "Show full text" feature for history items
+          - Implemented individual delete button for each history entry
+          - Added "Clear History" button to remove all entries
+          - History section auto-hides when empty
+          - Click "Practice" button to reload any historical text
+
+      - area: Explore Page - AI Text Generation
+        description: Added AI-powered custom text generation feature
+        improvements:
+          - New "Generate Text" button with gradient purple design
+          - Modal interface for text generation with prompt input
+          - Configurable text length (short/medium/long: 50-300 words)
+          - Uses Gemini 2.0 Flash API for text generation
+          - Generated texts automatically saved to history
+          - Auto-redirect to main app after successful generation
+          - Validates API key before generation
+          - Error handling with user-friendly messages
+          - Loading state with animated spinner
+
+      - area: Navigation Enhancement
+        description: Improved navigation between main app and explore page
+        improvements:
+          - Logo and title now link to explore page
+          - Added hover effect on logo link
+          - Better visual feedback for clickable elements
+
+      - area: Content Updates
+        description: Enhanced default text and about page content
+        improvements:
+          - Replaced default text with SEO-optimized project introduction
+          - Added comprehensive feature descriptions for better discoverability
+          - Included key learning benefits and usage instructions
+          - Added "The Story Behind Philingo" section to about page
+          - Story honors English teacher Phil and explains project inspiration
+          - Describes evolution from personal tool to full platform
+          - Reorganized about page with support section at top
+
   - version: 0.8.0
     date: 2025-12-14
     commit: pending

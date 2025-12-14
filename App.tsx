@@ -33,11 +33,24 @@ const decodeTextFromUrl = (encoded: string): string | null => {
 };
 
 // Default placeholder text
-const DEFAULT_TEXT = `The quick brown fox jumps over the lazy dog. 
+const DEFAULT_TEXT = `Welcome to Philingo - Your AI-Powered English Learning Companion
 
-Learning a new language is a journey of discovery. Every word you learn unlocks a new way of thinking and perceiving the world around you. Don't be afraid to make mistakes; they are the stepping stones to fluency.`;
+Philingo is an innovative English learning platform designed to help you improve your reading comprehension and pronunciation skills. Whether you're a beginner or advanced learner, our interactive tools make language practice engaging and effective.
+
+Key Features:
+• Interactive Reading Practice - Read English texts with instant word definitions and phonetic transcriptions
+• AI-Powered Pronunciation Feedback - Get real-time feedback on your spoken English using advanced speech recognition technology
+• Personalized Learning - Track your vocabulary mastery and focus on words that need more practice
+• Text Generation - Create custom practice materials tailored to your learning goals and interests
+• Natural Voice Synthesis - Listen to native-like pronunciation for every word and sentence
+
+How It Works:
+Simply paste any English text you want to practice, or generate custom content using AI. Click on any word to see its definition, pronunciation guide, and hear it spoken aloud. Record yourself reading the text and receive instant feedback on your pronunciation accuracy. Build your vocabulary systematically and track your progress over time.
+
+Start your English learning journey today with Philingo - where technology meets language education to create an immersive, personalized learning experience. Practice reading, improve pronunciation, and master English vocabulary at your own pace.`;
 
 const STORAGE_KEY_TEXT = 'vocabflow_input_text';
+const STORAGE_KEY_HISTORY = 'philingo_text_history';
 
 export default function App() {
   // Track if text came from URL (should not be saved to localStorage)
@@ -131,6 +144,38 @@ export default function App() {
     if (!isFromUrl) {
       localStorage.setItem(STORAGE_KEY_TEXT, inputText);
     }
+    
+    // Save to history (independent of URL status)
+    if (inputText.trim() && inputText !== DEFAULT_TEXT) {
+      try {
+        const historyStr = localStorage.getItem(STORAGE_KEY_HISTORY);
+        const history: Array<{text: string, timestamp: number, preview: string}> = historyStr ? JSON.parse(historyStr) : [];
+        
+        // Create preview (first 100 chars)
+        const preview = inputText.substring(0, 100) + (inputText.length > 100 ? '...' : '');
+        
+        // Check if this exact text already exists in history
+        const existingIndex = history.findIndex(item => item.text === inputText);
+        if (existingIndex !== -1) {
+          // Update timestamp of existing entry
+          history[existingIndex].timestamp = Date.now();
+        } else {
+          // Add new entry at the beginning
+          history.unshift({
+            text: inputText,
+            timestamp: Date.now(),
+            preview
+          });
+        }
+        
+        // Keep only the last 50 entries
+        const trimmedHistory = history.slice(0, 50);
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(trimmedHistory));
+      } catch (error) {
+        console.error('Failed to save to history:', error);
+      }
+    }
+    
     setIsFromUrl(false); // After saving, treat as local content
     setMode('read');
   };
@@ -152,14 +197,14 @@ export default function App() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-brand-600">
+          <a href="/explore.html" className="flex items-center space-x-2 text-brand-600 hover:text-brand-700 transition-colors">
             <div className="relative">
               <MessageCircle className="w-6 h-6" />
               <span className="absolute -bottom-0.5 -right-0.5 text-[8px] font-bold text-brand-700">Ph</span>
             </div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Philingo</h1>
             <span className="text-sm text-slate-400 font-normal italic hidden sm:inline">— practice makes perfect</span>
-          </div>
+          </a>
           
           <div className="flex items-center space-x-3">
              {/* Explore Button */}
