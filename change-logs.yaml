@@ -1,0 +1,149 @@
+project: VocabFlow English Reader
+description: An AI-powered English reading application with vocabulary learning and TTS features
+repository: 0xleizhang/vocabflow2
+
+changelog:
+  - version: 0.4.0
+    date: 2025-12-14
+    commit: 7e3599e
+    author: Lei Zhang
+    type: feature
+    summary: Enhanced playback features and audio caching
+    changes:
+      - area: Reader Component
+        description: Added auto-play and repeat modes for better listening experience
+        improvements:
+          - Implemented auto-play functionality for continuous playback
+          - Added repeat mode for vocabulary reinforcement
+          - Updated interaction modes to 'reading' and 'listen'
+      
+      - area: Word Component
+        description: Enhanced interaction modes and hover functionality
+        improvements:
+          - Updated interaction modes to 'reading' and 'listen'
+          - Added hover functionality specifically for listen mode
+          - Improved user interaction feedback
+      
+      - area: Gemini Service
+        description: Implemented TTS audio caching and format conversion
+        improvements:
+          - Added TTS audio caching mechanism for performance optimization
+          - Implemented PCM to WAV conversion for improved audio playback
+          - Enhanced audio quality and playback reliability
+      
+      - area: Development Configuration
+        description: Added local settings configuration
+        improvements:
+          - Added local settings configuration for development environment
+          - Improved developer experience
+
+  - version: 0.3.0
+    date: 2025-12-14
+    commit: c90eefb
+    author: Lei Zhang
+    type: refactor
+    summary: Code structure refactoring
+    changes:
+      - area: Code Architecture
+        description: Refactored code structure for improved readability and maintainability
+        improvements:
+          - Reorganized component structure
+          - Improved code modularity
+          - Enhanced maintainability
+          - Better separation of concerns
+
+  - version: 0.2.0
+    date: 2025-12-13
+    commit: 64a8856
+    author: Lei Zhang
+    type: feature
+    summary: Data persistence implementation
+    changes:
+      - area: Application State
+        description: Persist input text to localStorage for data retention
+        improvements:
+          - Added localStorage integration
+          - Implemented automatic text saving
+          - Enhanced user experience with data persistence
+          - Prevented data loss on page refresh
+
+  - version: 0.1.0
+    date: 2025-12-10
+    commit: 4b6eb08
+    author: Lei Zhang
+    type: feature
+    summary: Initial VocabFlow English Reader project
+    changes:
+      - area: Core Features
+        description: Initialize VocabFlow English Reader project
+        improvements:
+          - Created React + TypeScript + Vite application
+          - Implemented basic reading interface
+          - Integrated Gemini API for AI capabilities
+          - Set up TTS (Text-to-Speech) service
+          - Created vocabulary word components
+          - Implemented annotation badge system
+          - Added API key configuration modal
+          - Set up reader component with text rendering
+
+  - version: 0.0.1
+    date: 2025-12-10
+    commit: 67df5ef
+    author: Lei Zhang
+    type: initial
+    summary: Initial repository setup
+    changes:
+      - area: Repository
+        description: Initial commit
+        improvements:
+          - Created GitHub repository
+          - Set up initial project structure
+
+features_summary:
+  core_features:
+    - AI-powered English reading interface
+    - Text-to-Speech (TTS) functionality with audio caching
+    - Vocabulary word highlighting and annotation
+    - Multiple interaction modes (reading and listen)
+    - Auto-play and repeat modes for enhanced learning
+    - Local storage persistence for user data
+
+  technical_stack:
+    - frontend: React + TypeScript + Vite
+    - ai_service: Google Gemini API
+    - styling: Tailwind CSS (implied from components)
+    - audio: TTS with PCM to WAV conversion
+
+  development_highlights:
+    - Progressive feature enhancement
+    - Focus on user experience and performance
+    - Code quality and maintainability improvements
+    - Audio caching for optimized performance
+    - Data persistence for better UX
+
+iteration_timeline:
+  phase_1:
+    period: 2025-12-10
+    focus: Project initialization and core features
+    achievements:
+      - Set up development environment
+      - Implemented basic reading interface
+      - Integrated AI services
+      - Created fundamental components
+
+  phase_2:
+    period: 2025-12-13
+    focus: Data persistence and user experience
+    achievements:
+      - Added localStorage integration
+      - Improved data retention
+
+  phase_3:
+    period: 2025-12-14
+    focus: Code quality and advanced features
+    achievements:
+      - Refactored code structure
+      - Enhanced playback features
+      - Implemented audio caching
+      - Added multiple interaction modes
+      - Improved audio quality

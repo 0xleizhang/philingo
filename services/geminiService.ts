@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { Annotation } from '../types';
+import { Annotation, PronunciationFeedback, WordError } from '../types';
 
 // Base64 decode helper for audio data
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -61,14 +61,130 @@ export interface TTSAudioResult {
   mimeType: string;
 }
 
-// TTS audio cache - stores audio data by text content
-const ttsCache = new Map<string, TTSAudioResult>();
+// LocalStorage cache entry (stores base64 for persistence)
+interface TTSCacheEntry {
+  base64: string;
+  mimeType: string;
+  timestamp: number;
+}
 
-// Max cache size to prevent memory issues (cache up to 50 sentences)
-const MAX_TTS_CACHE_SIZE = 50;
+// LocalStorage key prefix
+const TTS_CACHE_PREFIX = 'vocabflow_tts_';
+const TTS_CACHE_INDEX_KEY = 'vocabflow_tts_index';
+
+// Max cache size (limit to ~20 entries to stay within localStorage limits)
+const MAX_TTS_CACHE_SIZE = 20;
+
+// In-memory cache for fast access during session
+const memoryCache = new Map<string, TTSAudioResult>();
+
+// Generate a cache key from text
+function getCacheKey(text: string): string {
+  // Use a simple hash to create shorter keys
+  let hash = 0;
+  const str = text.trim();
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return TTS_CACHE_PREFIX + Math.abs(hash).toString(36);
+}
+
+// Get cache index (list of cached keys with timestamps)
+function getCacheIndex(): { key: string; text: string; timestamp: number }[] {
+  try {
+    const index = localStorage.getItem(TTS_CACHE_INDEX_KEY);
+    return index ? JSON.parse(index) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Save cache index
+function saveCacheIndex(index: { key: string; text: string; timestamp: number }[]): void {
+  try {
+    localStorage.setItem(TTS_CACHE_INDEX_KEY, JSON.stringify(index));
+  } catch (e) {
+    console.warn("Failed to save TTS cache index:", e);
+  }
+}
+
+// Get cached TTS from localStorage
+function getFromLocalStorage(text: string): TTSAudioResult | null {
+  const cacheKey = getCacheKey(text);
+
+  // Check memory cache first
+  if (memoryCache.has(text.trim())) {
+    return memoryCache.get(text.trim())!;
+  }
+
+  try {
+    const stored = localStorage.getItem(cacheKey);
+    if (!stored) return null;
+
+    const entry: TTSCacheEntry = JSON.parse(stored);
+    const data = base64ToArrayBuffer(entry.base64);
+    const result: TTSAudioResult = { data, mimeType: entry.mimeType };
+
+    // Store in memory cache for faster subsequent access
+    memoryCache.set(text.trim(), result);
+
+    return result;
+  } catch (e) {
+    console.warn("Failed to read TTS from localStorage:", e);
+    return null;
+  }
+}
+
+// Save TTS to localStorage
+function saveToLocalStorage(text: string, result: TTSAudioResult): void {
+  const cacheKey = getCacheKey(text);
+  const textKey = text.trim();
+
+  // Store in memory cache
+  memoryCache.set(textKey, result);
+
+  try {
+    // Convert ArrayBuffer to base64
+    const base64 = arrayBufferToBase64(result.data);
+    const entry: TTSCacheEntry = {
+      base64,
+      mimeType: result.mimeType,
+      timestamp: Date.now()
+    };
+
+    // Update index
+    let index = getCacheIndex();
+
+    // Remove existing entry for this text if present
+    index = index.filter(e => e.text !== textKey);
+
+    // Manage cache size - remove oldest entries if full
+    while (index.length >= MAX_TTS_CACHE_SIZE) {
+      const oldest = index.shift();
+      if (oldest) {
+        localStorage.removeItem(oldest.key);
+        memoryCache.delete(oldest.text);
+      }
+    }
+
+    // Add new entry
+    index.push({ key: cacheKey, text: textKey, timestamp: Date.now() });
+
+    // Save to localStorage
+    localStorage.setItem(cacheKey, JSON.stringify(entry));
+    saveCacheIndex(index);
+
+    console.log("TTS cached to localStorage:", textKey.slice(0, 30) + "...");
+  } catch (e) {
+    console.warn("Failed to save TTS to localStorage (quota exceeded?):", e);
+    // If storage fails, at least we have it in memory
+  }
+}
 
 /**
- * Fetch TTS audio from Gemini API with caching
+ * Fetch TTS audio from Gemini API with caching (persisted to localStorage)
  * Returns audio data with mimeType
  */
 export const fetchTTSAudio = async (text: string, apiKey: string): Promise<TTSAudioResult> => {
@@ -76,11 +192,10 @@ export const fetchTTSAudio = async (text: string, apiKey: string): Promise<TTSAu
     throw new Error("API Key is missing. Please configure it in settings.");
   }
 
-  // Check cache first
-  const cacheKey = text.trim();
-  const cached = ttsCache.get(cacheKey);
+  // Check cache first (memory + localStorage)
+  const cached = getFromLocalStorage(text);
   if (cached) {
-    console.log("TTS cache hit:", cacheKey.slice(0, 30) + "...");
+    console.log("TTS cache hit:", text.trim().slice(0, 30) + "...");
     return cached;
   }
 
@@ -129,17 +244,8 @@ export const fetchTTSAudio = async (text: string, apiKey: string): Promise<TTSAu
 
       const result: TTSAudioResult = { data: audioData, mimeType: outputMimeType };
 
-      // Manage cache size - remove oldest entries if full
-      if (ttsCache.size >= MAX_TTS_CACHE_SIZE) {
-        const firstKey = ttsCache.keys().next().value;
-        if (firstKey) {
-          ttsCache.delete(firstKey);
-        }
-      }
-
-      // Store in cache
-      ttsCache.set(cacheKey, result);
-      console.log("TTS cached:", cacheKey.slice(0, 30) + "...");
+      // Store in cache (memory + localStorage)
+      saveToLocalStorage(text, result);
 
       return result;
     }
@@ -152,11 +258,20 @@ export const fetchTTSAudio = async (text: string, apiKey: string): Promise<TTSAu
 };
 
 /**
- * Clear the TTS cache (useful when text content changes)
+ * Clear the TTS cache (both memory and localStorage)
  */
 export const clearTTSCache = () => {
-  ttsCache.clear();
-  console.log("TTS cache cleared");
+  // Clear memory cache
+  memoryCache.clear();
+
+  // Clear localStorage cache
+  const index = getCacheIndex();
+  for (const entry of index) {
+    localStorage.removeItem(entry.key);
+  }
+  localStorage.removeItem(TTS_CACHE_INDEX_KEY);
+
+  console.log("TTS cache cleared (memory + localStorage)");
 };
 
 export const fetchWordAnnotation = async (word: string, contextSentence: string, apiKey: string): Promise<Annotation> => {
@@ -204,6 +319,112 @@ export const fetchWordAnnotation = async (word: string, contextSentence: string,
 
   } catch (error) {
     console.error("Error fetching annotation:", error);
+    throw error;
+  }
+};
+
+// Helper: Convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Analyze pronunciation by comparing user's audio against the original text
+ * Returns feedback with score, comments, and error words
+ */
+export const analyzePronunciation = async (
+  audioBlob: Blob,
+  originalText: string,
+  apiKey: string
+): Promise<PronunciationFeedback> => {
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please configure it in settings.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    // Convert blob to base64
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const base64Audio = arrayBufferToBase64(arrayBuffer);
+
+    const prompt = `You are an English pronunciation coach. Listen to this audio recording where a student reads the following text:
+
+"${originalText}"
+
+Analyze the pronunciation and provide feedback in JSON format with:
+1. score: A number from 0-100 rating the overall pronunciation quality
+2. feedback: A brief overall comment in Chinese (1-2 sentences)
+3. errors: An array of words that had pronunciation issues, each with:
+   - word: the mispronounced word (must match exactly a word in the original text)
+   - issue: a brief description of the issue in Chinese (e.g., "元音发音不准", "重音位置错误", "尾音不清晰")
+
+Be encouraging but honest. If the pronunciation is good, return an empty errors array.
+Focus on significant errors that affect comprehension.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: audioBlob.type || 'audio/webm',
+                data: base64Audio
+              }
+            },
+            { text: prompt }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            score: { type: Type.NUMBER, description: "Pronunciation score 0-100" },
+            feedback: { type: Type.STRING, description: "Overall feedback in Chinese" },
+            errors: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING, description: "The mispronounced word" },
+                  issue: { type: Type.STRING, description: "Description of the issue in Chinese" }
+                },
+                required: ["word", "issue"]
+              }
+            }
+          },
+          required: ["score", "feedback", "errors"]
+        }
+      }
+    });
+
+    const jsonText = response.text;
+    if (!jsonText) {
+      throw new Error("No response from AI");
+    }
+
+    const result = JSON.parse(jsonText) as { score: number; feedback: string; errors: WordError[] };
+
+    return {
+      id: `feedback-${Date.now()}`,
+      sentence: originalText,
+      timestamp: new Date(),
+      score: result.score,
+      feedback: result.feedback,
+      errors: result.errors || []
+    };
+
+  } catch (error) {
+    console.error("Error analyzing pronunciation:", error);
     throw error;
   }
 };

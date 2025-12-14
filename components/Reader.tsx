@@ -1,7 +1,9 @@
-import { Ear, FastForward, Languages, Loader2, Pause, Play, Repeat, Rewind, SkipForward, Square } from 'lucide-react';
+import { Ear, FastForward, Languages, Loader2, Mic, Pause, Play, Repeat, Rewind, SkipForward, Square } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { clearTTSCache, fetchTTSAudio, fetchWordAnnotation } from '../services/geminiService';
-import { WordToken } from '../types';
+import { analyzePronunciation, clearTTSCache, fetchTTSAudio, fetchWordAnnotation } from '../services/geminiService';
+import { audioRecorder } from '../services/audioRecordingService';
+import { InteractionMode, PronunciationFeedback, WordError, WordToken } from '../types';
+import { FeedbackPanel } from './FeedbackPanel';
 import { Word } from './Word';
 
 interface ReaderProps {
@@ -19,16 +21,22 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [sentences, setSentences] = useState<string[]>([]);
   
-  // Interaction Mode: 'reading' (lookup word) or 'listen' (start TTS)
-  const [interactionMode, setInteractionMode] = useState<'reading' | 'listen'>('reading');
+  // Interaction Mode: 'reading' (lookup word), 'listen' (start TTS), or 'test' (pronunciation test)
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>('reading');
 
-  // Hover state for listen mode
+  // Hover state for listen/test mode
   const [hoveredSentenceIndex, setHoveredSentenceIndex] = useState<number | null>(null);
 
   // Playback settings
   const [autoPlay, setAutoPlay] = useState(true);  // Auto play next sentence
   const [repeatMode, setRepeatMode] = useState(false);  // Repeat mode
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);  // Loading state for TTS
+
+  // Test mode states
+  const [isRecording, setIsRecording] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [feedbackList, setFeedbackList] = useState<PronunciationFeedback[]>([]);
+  const [pronunciationErrors, setPronunciationErrors] = useState<Map<number, WordError>>(new Map());
 
   // Refs for audio control
   const synthRef = useRef<SpeechSynthesis>(window.speechSynthesis);
@@ -276,16 +284,103 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
   }, []);
 
 
+  // --- Stop Recording Handler ---
+  const handleStopRecording = useCallback(() => {
+    audioRecorder.stopRecording();
+  }, []);
+
+  // --- Test Mode Handler ---
+  const handleTestModeClick = useCallback(async (sentenceIndex: number) => {
+    if (!apiKey) {
+      onMissingKey();
+      return;
+    }
+
+    if (isRecording || isAnalyzing) return;
+
+    const sentenceText = sentences[sentenceIndex];
+    if (!sentenceText) return;
+
+    try {
+      // 1. Play beep to indicate recording start
+      await audioRecorder.playBeep();
+
+      // 2. Start recording with VAD
+      setIsRecording(true);
+      setCurrentSentenceIndex(sentenceIndex);
+
+      const { audioBlob } = await audioRecorder.recordWithVAD(
+        () => console.log("Recording started"),
+        () => setIsRecording(false)
+      );
+
+      // 3. Create audio URL for playback
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // 4. Analyze pronunciation
+      setIsAnalyzing(true);
+
+      const feedback = await analyzePronunciation(audioBlob, sentenceText, apiKey);
+
+      // 5. Add feedback to list with audio URL (newest first)
+      setFeedbackList(prev => [{ ...feedback, audioUrl }, ...prev]);
+
+      // 6. Mark error words in the text
+      if (feedback.errors.length > 0) {
+        const newErrors = new Map(pronunciationErrors);
+
+        // Find token indices for error words in this sentence
+        tokens.forEach((token, tokenIndex) => {
+          if (token.sentenceIndex === sentenceIndex && token.isWord) {
+            const errorMatch = feedback.errors.find(
+              err => err.word.toLowerCase() === token.text.toLowerCase()
+            );
+            if (errorMatch) {
+              newErrors.set(tokenIndex, errorMatch);
+            }
+          }
+        });
+
+        setPronunciationErrors(newErrors);
+      }
+
+      setIsAnalyzing(false);
+
+    } catch (error) {
+      console.error("Test mode error:", error);
+      setIsRecording(false);
+      setIsAnalyzing(false);
+    }
+  }, [apiKey, onMissingKey, isRecording, isAnalyzing, sentences, tokens, pronunciationErrors]);
+
   // --- Combined Click Handler ---
   const handleWordClick = useCallback(async (e: React.MouseEvent, tokenIndex: number) => {
     const token = tokens[tokenIndex];
     if (!token) return;
 
-    // CHECK INTENT:
-    // 1. If Interaction Mode is 'play' OR
-    // 2. If user is holding Ctrl/Command key (Shortcut)
-    // THEN -> Play Sentence
     const isModifierPressed = e.ctrlKey || e.metaKey;
+
+    // CHECK INTENT:
+    // 1. If Interaction Mode is 'test'
+    if (interactionMode === 'test') {
+      // Ctrl+Click in test mode -> Play sentence (listen)
+      if (isModifierPressed) {
+        if (token.sentenceIndex >= 0 && token.sentenceIndex < sentences.length) {
+          setIsPlaying(true);
+          isPausedRef.current = false;
+          playSentence(token.sentenceIndex);
+        }
+        return;
+      }
+      // Normal click -> Start pronunciation test
+      if (token.sentenceIndex >= 0 && token.sentenceIndex < sentences.length) {
+        handleTestModeClick(token.sentenceIndex);
+      }
+      return;
+    }
+
+    // 2. If Interaction Mode is 'listen' OR user is holding Ctrl/Command key (in reading mode)
+    // THEN -> Play Sentence
     const shouldPlay = interactionMode === 'listen' || isModifierPressed;
 
     if (shouldPlay) {
@@ -307,7 +402,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
 
     if (token.status === 'success' || token.status === 'loading') return;
 
-    setTokens(prev => prev.map((t, i) => 
+    setTokens(prev => prev.map((t, i) =>
       i === tokenIndex ? { ...t, status: 'loading' } : t
     ));
 
@@ -318,22 +413,22 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
 
       const annotation = await fetchWordAnnotation(token.text, contextString, apiKey);
 
-      setTokens(prev => prev.map((t, i) => 
-        i === tokenIndex 
-          ? { ...t, status: 'success', annotation } 
+      setTokens(prev => prev.map((t, i) =>
+        i === tokenIndex
+          ? { ...t, status: 'success', annotation }
           : t
       ));
     } catch (error) {
-      setTokens(prev => prev.map((t, i) => 
+      setTokens(prev => prev.map((t, i) =>
         i === tokenIndex ? { ...t, status: 'error' } : t
       ));
       setTimeout(() => {
-        setTokens(prev => prev.map((t, i) => 
+        setTokens(prev => prev.map((t, i) =>
             i === tokenIndex && t.status === 'error' ? { ...t, status: 'idle' } : t
           ));
       }, 3000);
     }
-  }, [tokens, apiKey, onMissingKey, interactionMode, sentences, playSentence]);
+  }, [tokens, apiKey, onMissingKey, interactionMode, sentences, playSentence, handleTestModeClick]);
 
   if (!rawText.trim()) {
     return (
@@ -343,25 +438,34 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
     );
   }
 
+  // Clear feedback when switching away from test mode
+  const handleClearFeedback = useCallback(() => {
+    setFeedbackList([]);
+    setPronunciationErrors(new Map());
+  }, []);
+
   return (
-    <div className="w-full max-w-4xl mx-auto pb-32 relative">
-      <div className="p-4 md:p-8 bg-white shadow-sm rounded-xl min-h-[50vh] relative">
-        <div className="prose prose-lg prose-slate max-w-none font-serif leading-loose text-slate-800">
-          <p className="whitespace-pre-wrap">
+    <div className={`w-full mx-auto pb-32 relative ${interactionMode === 'test' ? 'max-w-6xl' : 'max-w-4xl'}`}>
+      <div className={`flex gap-4 ${interactionMode === 'test' ? 'flex-col lg:flex-row' : ''}`}>
+        {/* Main Text Area */}
+        <div className={`p-4 md:p-8 bg-white shadow-sm rounded-xl min-h-[50vh] relative ${interactionMode === 'test' ? 'flex-1' : 'w-full'}`}>
+          <div className="prose prose-lg prose-slate max-w-none font-serif leading-loose text-slate-800">
+            <p className="whitespace-pre-wrap">
             {tokens.map((token, index) => {
               const isSentenceActive = token.sentenceIndex === currentSentenceIndex;
-              const isSentenceHovered = interactionMode === 'listen' && token.sentenceIndex === hoveredSentenceIndex;
+              const isSentenceHovered = (interactionMode === 'listen' || interactionMode === 'test') && token.sentenceIndex === hoveredSentenceIndex;
               const shouldHighlight = isSentenceActive || isSentenceHovered;
+              const tokenError = pronunciationErrors.get(index) || null;
 
               if (!token.isWord) {
                 // Also highlight punctuation if sentence is active or hovered
                 return (
                     <span
                         key={token.id}
-                        className={`transition-colors duration-300 ${shouldHighlight ? 'bg-brand-100/80' : 'text-slate-500'} ${interactionMode === 'listen' ? 'cursor-pointer' : 'cursor-text'}`}
+                        className={`transition-colors duration-300 ${shouldHighlight ? 'bg-brand-100/80' : 'text-slate-500'} ${(interactionMode === 'listen' || interactionMode === 'test') ? 'cursor-pointer' : 'cursor-text'}`}
                         onClick={(e) => handleWordClick(e, index)}
-                        onMouseEnter={() => interactionMode === 'listen' && setHoveredSentenceIndex(token.sentenceIndex)}
-                        onMouseLeave={() => interactionMode === 'listen' && setHoveredSentenceIndex(null)}
+                        onMouseEnter={() => (interactionMode === 'listen' || interactionMode === 'test') && setHoveredSentenceIndex(token.sentenceIndex)}
+                        onMouseLeave={() => (interactionMode === 'listen' || interactionMode === 'test') && setHoveredSentenceIndex(null)}
                     >
                         {token.text}
                     </span>
@@ -376,6 +480,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
                   isHighlighted={shouldHighlight}
                   interactionMode={interactionMode}
                   onHoverSentence={setHoveredSentenceIndex}
+                  pronunciationError={tokenError}
                 />
               );
             })}
@@ -383,9 +488,52 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
         </div>
         
         <div className="mt-8 pt-4 border-t border-slate-100 text-center text-sm text-slate-400 font-sans">
-          Click to {interactionMode === 'reading' ? 'reading' : 'listen'} •
-          <span className="hidden md:inline ml-1">Hold Ctrl+Click to {interactionMode === 'reading' ? 'listen' : 'reading'}</span>
+          {isRecording && (
+            <span className="inline-flex items-center gap-3 text-red-500">
+              <span className="inline-flex items-center gap-2 animate-pulse">
+                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                录音中... 请朗读句子
+              </span>
+              <button
+                onClick={handleStopRecording}
+                className="px-3 py-1 text-xs font-medium bg-red-100 hover:bg-red-200 text-red-600 rounded-full transition-colors"
+              >
+                结束录音
+              </button>
+            </span>
+          )}
+          {isAnalyzing && (
+            <span className="inline-flex items-center gap-3 text-brand-500">
+              <span className="inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                分析发音中...
+              </span>
+              <button
+                onClick={() => setIsAnalyzing(false)}
+                className="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
+              >
+                取消
+              </button>
+            </span>
+          )}
+          {!isRecording && !isAnalyzing && (
+            <>
+              Click to {interactionMode === 'reading' ? 'lookup words' : interactionMode === 'listen' ? 'listen' : 'test pronunciation'} •
+              <span className="hidden md:inline ml-1">Hold Ctrl+Click to {interactionMode === 'listen' ? 'lookup words' : 'listen'}</span>
+            </>
+          )}
         </div>
+      </div>
+
+        {/* Feedback Panel (Right Side) - Only visible in test mode */}
+        {interactionMode === 'test' && (
+          <div className="w-full lg:w-80 bg-white shadow-sm rounded-xl overflow-hidden flex-shrink-0">
+            <FeedbackPanel
+              feedbackList={feedbackList}
+              onClear={handleClearFeedback}
+            />
+          </div>
+        )}
       </div>
 
       {/* Floating Audio Player Control Bar */}
@@ -410,12 +558,23 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
                  <Languages size={16} />
                  <span className="hidden sm:inline">Reading</span>
                </button>
+               <button
+                 onClick={() => setInteractionMode('test')}
+                 className={`p-2 rounded-md flex items-center gap-2 text-xs font-semibold transition-all ${interactionMode === 'test' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                 title="Test Mode - Practice Pronunciation"
+               >
+                 <Mic size={16} />
+                 <span className="hidden sm:inline">Test</span>
+               </button>
             </div>
 
-            {/* Separator */}
-            <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+            {/* Separator - only show in listen mode */}
+            {interactionMode === 'listen' && (
+              <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+            )}
 
-            {/* 2. Playback Controls (Center/Right) */}
+            {/* 2. Playback Controls (Center/Right) - Only visible in listen mode */}
+            {interactionMode === 'listen' && (
             <div className="flex flex-1 items-center justify-between gap-2 md:gap-4">
                 {/* Speed */}
                 <div className="flex items-center space-x-0.5">
@@ -474,6 +633,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, onMissingKey })
                      </button>
                 </div>
             </div>
+            )}
         </div>
       </div>
     </div>

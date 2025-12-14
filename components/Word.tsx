@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { WordToken } from '../types';
+import { WordToken, WordError, InteractionMode } from '../types';
 import { Loader2, Volume2 } from 'lucide-react';
 import { playPronunciation } from '../services/ttsService';
 
@@ -7,25 +7,26 @@ interface WordProps {
   token: WordToken;
   onClick: (e: React.MouseEvent) => void;
   isHighlighted?: boolean;
-  interactionMode: 'reading' | 'listen';
+  interactionMode: InteractionMode;
   onHoverSentence?: (sentenceIndex: number | null) => void;
+  pronunciationError?: WordError | null;
 }
 
-export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = false, interactionMode, onHoverSentence }) => {
+export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = false, interactionMode, onHoverSentence, pronunciationError }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Handle sentence hover in listen mode
+  // Handle sentence hover in listen/test mode
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (interactionMode === 'listen' && onHoverSentence) {
+    if ((interactionMode === 'listen' || interactionMode === 'test') && onHoverSentence) {
       onHoverSentence(token.sentenceIndex);
     }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
-    if (interactionMode === 'listen' && onHoverSentence) {
+    if ((interactionMode === 'listen' || interactionMode === 'test') && onHoverSentence) {
       onHoverSentence(null);
     }
   };
@@ -50,10 +51,13 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
     }
   };
 
+  // Helper for pronunciation error
+  const hasPronunciationError = !!pronunciationError;
+
   // Determine cursor style based on mode and status
   let cursorClass = '';
-  if (interactionMode === 'listen') {
-    cursorClass = 'cursor-pointer'; // Finger pointer for "Listen"
+  if (interactionMode === 'listen' || interactionMode === 'test') {
+    cursorClass = 'cursor-pointer'; // Finger pointer for "Listen" or "Test"
   } else if (isAnnotated) {
     cursorClass = 'cursor-help'; // Question mark for "Show Definition"
   } else if (isLoading) {
@@ -70,8 +74,8 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
         onMouseLeave={handleMouseLeave}
         onClick={(e) => {
           e.stopPropagation();
-          // Allow clicking even if annotated to trigger listen mode if active
-          if (interactionMode === 'listen' || (!isAnnotated && !isLoading)) {
+          // Allow clicking in listen/test mode, or for word lookup in reading mode
+          if (interactionMode === 'listen' || interactionMode === 'test' || (!isAnnotated && !isLoading)) {
             onClick(e);
           }
         }}
@@ -80,10 +84,12 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
           ${cursorClass}
           ${isLoading ? 'opacity-50' : ''}
           ${isError ? 'text-red-500 decoration-red-300 underline decoration-wavy' : ''}
-          ${isAnnotated ? 'text-brand-800 font-semibold border-b-2 border-brand-200' : ''}
-          ${!isAnnotated && !isLoading && !isError ? 'hover:text-brand-800 hover:bg-black/5' : ''}
-          ${interactionMode === 'listen' && !isLoading ? 'hover:underline decoration-brand-300 decoration-2 underline-offset-2' : ''}
+          ${hasPronunciationError ? 'text-orange-600 underline decoration-orange-400 decoration-wavy decoration-2 underline-offset-2' : ''}
+          ${isAnnotated && !hasPronunciationError ? 'text-brand-800 font-semibold border-b-2 border-brand-200' : ''}
+          ${!isAnnotated && !isLoading && !isError && !hasPronunciationError ? 'hover:text-brand-800 hover:bg-black/5' : ''}
+          ${(interactionMode === 'listen' || interactionMode === 'test') && !isLoading ? 'hover:underline decoration-brand-300 decoration-2 underline-offset-2' : ''}
         `}
+        title={hasPronunciationError ? pronunciationError?.issue : undefined}
       >
         {token.text}
       </span>

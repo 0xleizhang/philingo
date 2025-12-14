@@ -1,5 +1,5 @@
-import { BookOpen, Edit3, KeyRound, Link, Settings, Sparkles, Check } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { BookOpen, Check, Edit3, Info, KeyRound, Link, Settings, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { Button } from './components/Button';
 import { Reader } from './components/Reader';
@@ -157,6 +157,16 @@ export default function App() {
           </div>
           
           <div className="flex items-center space-x-3">
+             {/* About Button */}
+             <a
+                href="/about.html"
+                target="_blank"
+                className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"
+                title="About"
+             >
+                <Info size={20} />
+             </a>
+
              {/* API Key Button */}
              <button
                 onClick={() => setIsKeyModalOpen(true)}
