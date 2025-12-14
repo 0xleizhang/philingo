@@ -64,30 +64,34 @@ export const WritingMode: React.FC<WritingModeProps> = ({ rawText, tokens }) => 
     setAllCorrect(false);
   }, [rawText, tokens]);
 
-  // Handle input change
+  // Handle input change with immediate checking
   const handleInputChange = useCallback((tokenIndex: number, value: string) => {
-    setBlanks(prev => prev.map(blank =>
-      blank.tokenIndex === tokenIndex
-        ? { ...blank, userInput: value, status: 'blank' }
-        : blank
-    ));
-  }, []);
-
-  // Check a single answer
-  const checkAnswer = useCallback((tokenIndex: number) => {
     setBlanks(prev => {
       const newBlanks = prev.map(blank => {
         if (blank.tokenIndex !== tokenIndex) return blank;
 
-        const isCorrect = blank.userInput.toLowerCase().trim() === blank.word.toLowerCase();
+        // Already correct - don't change
+        if (blank.status === 'correct') return blank;
 
-        if (isCorrect) {
+        const inputLower = value.toLowerCase().trim();
+        const wordLower = blank.word.toLowerCase();
+
+        // Check if correct
+        if (inputLower === wordLower) {
           const newCount = markWordCorrect(rawText, blank.word);
-          return { ...blank, status: 'correct' as const, correctCount: newCount };
-        } else {
-          resetWordProgress(rawText, blank.word);
-          return { ...blank, status: 'incorrect' as const, correctCount: 0 };
+          return { ...blank, userInput: value, status: 'correct' as const, correctCount: newCount };
         }
+
+        // Check if incorrect (only when input length >= word length or has wrong characters)
+        const isIncorrect = inputLower.length > 0 && !wordLower.startsWith(inputLower);
+
+        if (isIncorrect) {
+          resetWordProgress(rawText, blank.word);
+          return { ...blank, userInput: value, status: 'incorrect' as const, correctCount: 0 };
+        }
+
+        // Still typing - show as blank (neutral)
+        return { ...blank, userInput: value, status: 'blank' as const };
       });
 
       // Check if all are correct
@@ -98,22 +102,32 @@ export const WritingMode: React.FC<WritingModeProps> = ({ rawText, tokens }) => 
     });
   }, [rawText]);
 
-  // Handle Enter key
-  const handleKeyDown = useCallback((e: React.KeyboardEvent, tokenIndex: number) => {
-    if (e.key === 'Enter') {
-      checkAnswer(tokenIndex);
-    }
-  }, [checkAnswer]);
-
-  // Reset all blanks
+  // Reset all blanks - re-fetch from localStorage to exclude mastered words
   const handleReset = useCallback(() => {
-    setBlanks(prev => prev.map(blank => ({
-      ...blank,
-      userInput: '',
-      status: 'blank'
-    })));
+    const unmasteredWords = getUnmasteredWords(rawText);
+    const masteryThreshold = getMasteryThreshold();
+
+    setBlanks(prev => {
+      // Filter out words that have been mastered, and reset the rest
+      return prev
+        .filter(blank => {
+          // Check if this word is still unmastered in localStorage
+          const mastery = unmasteredWords.find(w => w.word === blank.word.toLowerCase());
+          return mastery && mastery.correctCount < masteryThreshold;
+        })
+        .map(blank => {
+          // Get fresh correctCount from localStorage
+          const mastery = unmasteredWords.find(w => w.word === blank.word.toLowerCase());
+          return {
+            ...blank,
+            userInput: '',
+            status: 'blank' as const,
+            correctCount: mastery?.correctCount ?? blank.correctCount
+          };
+        });
+    });
     setAllCorrect(false);
-  }, []);
+  }, [rawText]);
 
   // Check if a token should be shown as a blank
   const isBlankToken = useCallback((tokenIndex: number): BlankState | undefined => {
@@ -205,8 +219,6 @@ export const WritingMode: React.FC<WritingModeProps> = ({ rawText, tokens }) => 
                       type="text"
                       value={blank.userInput}
                       onChange={(e) => handleInputChange(index, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, index)}
-                      onBlur={() => blank.userInput && checkAnswer(index)}
                       disabled={blank.status === 'correct'}
                       className={`
                         px-2 py-1 text-center font-serif text-lg rounded-md border-2 outline-none transition-all

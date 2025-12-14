@@ -154,6 +154,7 @@ export default function App() {
           <div className="flex items-center space-x-2 text-brand-600">
             <Sparkles className="w-6 h-6" />
             <h1 className="text-xl font-bold tracking-tight text-slate-900">VocabFlow</h1>
+            <span className="text-sm text-slate-400 font-normal italic hidden sm:inline">— practice makes perfect</span>
           </div>
           
           <div className="flex items-center space-x-3">

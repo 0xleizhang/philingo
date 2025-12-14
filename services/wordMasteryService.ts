@@ -70,8 +70,10 @@ export function addLookedUpWord(text: string, word: string, annotation: Annotati
       correctCount: 0
     });
   } else {
-    // Update annotation if it changed
+    // Word looked up again - reset progress (user forgot it)
     data.words[existingIndex].annotation = annotation;
+    data.words[existingIndex].correctCount = 0;
+    delete data.words[existingIndex].lastCorrect;
   }
 
   data.updatedAt = Date.now();

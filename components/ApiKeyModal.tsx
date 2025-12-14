@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { ExternalLink, Eye, EyeOff, Key, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
-import { Key, ExternalLink, X, Eye, EyeOff } from 'lucide-react';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -72,14 +72,30 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSav
             <ExternalLink className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <p>
               Don't have a key? Get one for free at{' '}
-              <a 
-                href="https://aistudio.google.com/app/apikey" 
-                target="_blank" 
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-blue-900 font-medium"
               >
                 Google AI Studio
               </a>
+            </p>
+          </div>
+
+          <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg">
+            <p className="font-medium mb-1">🚀 不想自己配置 API Key？</p>
+            <p className="text-amber-700">
+              希望我们开发托管版本，无需配置即可使用。如果您感兴趣，请{' '}
+              <a
+                href="https://docs.google.com/forms/d/e/1FAIpQLSfEuTv9I2n1p3RNNE44m94_RXOeiYtxvez5g8XUOuAelVOGQQ/viewform?usp=publish-editor"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-amber-900 font-medium"
+              >
+                填写表单
+              </a>
+              {' '}告诉我们，我们会优先通知您！
             </p>
           </div>
 

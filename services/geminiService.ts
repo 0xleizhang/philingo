@@ -274,9 +274,129 @@ export const clearTTSCache = () => {
   console.log("TTS cache cleared (memory + localStorage)");
 };
 
+// ============================================
+// Word Annotation Cache (localStorage)
+// ============================================
+
+const ANNOTATION_CACHE_PREFIX = 'vocabflow_annotation_';
+const ANNOTATION_CACHE_INDEX_KEY = 'vocabflow_annotation_index';
+const MAX_ANNOTATION_CACHE_SIZE = 500; // Can store many more annotations than audio
+
+// In-memory cache for fast access during session
+const annotationMemoryCache = new Map<string, Annotation>();
+
+// Get annotation cache key (word in lowercase)
+function getAnnotationCacheKey(word: string): string {
+  return ANNOTATION_CACHE_PREFIX + word.toLowerCase().trim();
+}
+
+// Get annotation cache index
+function getAnnotationCacheIndex(): { key: string; word: string; timestamp: number }[] {
+  try {
+    const index = localStorage.getItem(ANNOTATION_CACHE_INDEX_KEY);
+    return index ? JSON.parse(index) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Save annotation cache index
+function saveAnnotationCacheIndex(index: { key: string; word: string; timestamp: number }[]): void {
+  try {
+    localStorage.setItem(ANNOTATION_CACHE_INDEX_KEY, JSON.stringify(index));
+  } catch (e) {
+    console.warn("Failed to save annotation cache index:", e);
+  }
+}
+
+// Get cached annotation from localStorage
+function getAnnotationFromCache(word: string): Annotation | null {
+  const wordKey = word.toLowerCase().trim();
+  const cacheKey = getAnnotationCacheKey(word);
+
+  // Check memory cache first
+  if (annotationMemoryCache.has(wordKey)) {
+    return annotationMemoryCache.get(wordKey)!;
+  }
+
+  try {
+    const stored = localStorage.getItem(cacheKey);
+    if (!stored) return null;
+
+    const annotation: Annotation = JSON.parse(stored);
+
+    // Store in memory cache for faster subsequent access
+    annotationMemoryCache.set(wordKey, annotation);
+
+    return annotation;
+  } catch (e) {
+    console.warn("Failed to read annotation from localStorage:", e);
+    return null;
+  }
+}
+
+// Save annotation to localStorage
+function saveAnnotationToCache(word: string, annotation: Annotation): void {
+  const wordKey = word.toLowerCase().trim();
+  const cacheKey = getAnnotationCacheKey(word);
+
+  // Store in memory cache
+  annotationMemoryCache.set(wordKey, annotation);
+
+  try {
+    // Update index
+    let index = getAnnotationCacheIndex();
+
+    // Remove existing entry for this word if present
+    index = index.filter(e => e.word !== wordKey);
+
+    // Manage cache size - remove oldest entries if full
+    while (index.length >= MAX_ANNOTATION_CACHE_SIZE) {
+      const oldest = index.shift();
+      if (oldest) {
+        localStorage.removeItem(oldest.key);
+        annotationMemoryCache.delete(oldest.word);
+      }
+    }
+
+    // Add new entry
+    index.push({ key: cacheKey, word: wordKey, timestamp: Date.now() });
+
+    // Save to localStorage
+    localStorage.setItem(cacheKey, JSON.stringify(annotation));
+    saveAnnotationCacheIndex(index);
+
+    console.log("Annotation cached:", wordKey);
+  } catch (e) {
+    console.warn("Failed to save annotation to localStorage:", e);
+  }
+}
+
+/**
+ * Clear the annotation cache (both memory and localStorage)
+ */
+export const clearAnnotationCache = () => {
+  annotationMemoryCache.clear();
+
+  const index = getAnnotationCacheIndex();
+  for (const entry of index) {
+    localStorage.removeItem(entry.key);
+  }
+  localStorage.removeItem(ANNOTATION_CACHE_INDEX_KEY);
+
+  console.log("Annotation cache cleared");
+};
+
 export const fetchWordAnnotation = async (word: string, contextSentence: string, apiKey: string): Promise<Annotation> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
+  }
+
+  // Check cache first
+  const cached = getAnnotationFromCache(word);
+  if (cached) {
+    console.log("Annotation cache hit:", word);
+    return cached;
   }
 
   // Initialize the client dynamically with the user-provided key
@@ -286,11 +406,11 @@ export const fetchWordAnnotation = async (word: string, contextSentence: string,
     const prompt = `
       Analyze the English word "${word}".
       Context: "${contextSentence}".
-      
+
       Provide:
       1. The IPA phonetic transcription (British or American general).
       2. A concise Chinese definition (max 10 chars) suitable for this context.
-      
+
       Return as JSON.
     `;
 
@@ -315,7 +435,12 @@ export const fetchWordAnnotation = async (word: string, contextSentence: string,
       throw new Error("No response from AI");
     }
 
-    return JSON.parse(jsonText) as Annotation;
+    const annotation = JSON.parse(jsonText) as Annotation;
+
+    // Save to cache
+    saveAnnotationToCache(word, annotation);
+
+    return annotation;
 
   } catch (error) {
     console.error("Error fetching annotation:", error);
