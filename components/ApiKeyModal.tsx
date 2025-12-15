@@ -86,16 +86,16 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSav
           <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg">
             <p className="font-medium mb-1">🚀 不想自己配置 API Key？</p>
             <p className="text-amber-700">
-              希望我们开发托管版本，无需配置即可使用。如果您感兴趣，请{' '}
+              我们正在开发免配置版本，直接使用无需任何设置。想要第一时间体验？请{' '}
               <a
-                href="https://docs.google.com/forms/d/e/1FAIpQLSfEuTv9I2n1p3RNNE44m94_RXOeiYtxvez5g8XUOuAelVOGQQ/viewform?usp=publish-editor"
+                href="https://wj.qq.com/s2/25220840/c68c/"
                 target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-amber-900 font-medium"
               >
                 填写表单
               </a>
-              {' '}告诉我们，我们会优先通知您！
+              {' '}告诉我们您的想法，我们会优先为您开放使用权限！
             </p>
           </div>
 
