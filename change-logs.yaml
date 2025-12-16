@@ -3,6 +3,172 @@ description: An AI-powered English reading application with vocabulary learning 
 repository: 0xleizhang/philingo
 
 changelog:
+  - version: 1.0.0
+    date: 2025-12-16
+    commit: 1bc606a
+    author: Lei Zhang
+    type: feature
+    summary: Implemented comprehensive API status handling with real-time feedback system
+    changes:
+      - area: API Status Bar
+        description: Added visual feedback system for API operations
+        improvements:
+          - Implemented thin status bar below header for real-time API status
+          - Status bar shows animated pulse (brand color) during API loading
+          - Status bar turns red with detailed error messages on API failures
+          - Error messages auto-dismiss after 5 seconds
+          - Displays operation context (e.g., "Looking up word definition", "Generating audio", "Analyzing pronunciation")
+          - Minimal, non-intrusive design that doesn't disrupt user workflow
+
+      - area: App Component State Management
+        description: Enhanced state management for API operations
+        improvements:
+          - Added apiStatus state to track loading, errors, and current operation
+          - Implemented handleApiStart callback to notify API request initiation
+          - Implemented handleApiSuccess callback to clear loading state
+          - Implemented handleApiError callback with automatic error dismissal
+          - Passes status callbacks to Reader component for centralized status management
+
+      - area: Reader Component Integration
+        description: Integrated API status callbacks throughout Reader component
+        improvements:
+          - Added onApiStart, onApiSuccess, onApiError props to ReaderProps interface
+          - Word definition lookup (fetchWordAnnotation) now reports status
+          - TTS audio generation (fetchTTSAudio) now reports status
+          - Pronunciation analysis (analyzePronunciation) now reports status
+          - Enhanced error handling with user-friendly error messages
+          - All API errors now provide specific error context to users
+
+      - area: Error Messaging
+        description: Improved error communication to users
+        improvements:
+          - Replaced generic error handling with specific error messages
+          - Error messages extracted from Error objects when available
+          - Fallback to descriptive default messages for each operation type
+          - Errors displayed prominently but non-blockingly in status bar
+
+      - area: User Experience
+        description: Enhanced feedback and transparency
+        improvements:
+          - Users now always know when API operations are in progress
+          - Clear indication of what operation is being performed
+          - Immediate error feedback with actionable information
+          - Reduced confusion when API calls fail or take time
+
+  - version: 0.9.1
+    date: 2025-12-16
+    commit: f815058
+    author: Lei Zhang
+    type: feature
+    summary: Enhanced Word component interaction and improved text formatting
+    changes:
+      - area: Word Component Click Behavior
+        description: Improved click interaction in read mode for better UX
+        improvements:
+          - In read mode, clicking annotated words now plays pronunciation directly
+          - Clicking unannotated words still looks up definition as before
+          - Removed separate volume button for more compact UI
+          - Only IPA transcription badge remains for cleaner appearance
+          - Changed cursor to pointer when hovering over annotated words
+          - Simplified handlePlay function by removing unnecessary state management
+
+      - area: Audio Playback
+        description: Streamlined pronunciation playback logic
+        improvements:
+          - Removed isPlaying state and related loading indicators
+          - Cleaner click-to-play experience
+          - Removed Volume2 icon import (no longer needed)
+
+      - area: Text Formatting
+        description: Improved Format button behavior
+        improvements:
+          - Format button now creates one sentence per line without empty lines
+          - Added regex to remove any accidental empty lines
+          - More compact and readable text layout
+          - Updated comment to reflect "no empty lines" behavior
+
+      - area: Code Quality
+        description: Minor improvements and cleanup
+        improvements:
+          - Reorganized imports for better readability
+          - Simplified cursor class logic in read mode
+          - Removed unnecessary state management code
+
+  - version: 0.9.2
+    date: 2025-12-16
+    commit: f1946f4
+    author: Lei Zhang
+    type: feature
+    summary: Added multi-provider support with OpenAI integration
+    changes:
+      - area: Provider System Architecture
+        description: Implemented flexible multi-provider architecture
+        improvements:
+          - Added LLMProvider type supporting 'gemini' and 'openai'
+          - Created unified llmService.ts interface layer
+          - Provider selection automatically routes to appropriate service
+          - All API functions now accept provider parameter
+          - Maintains separate caches for each provider
+
+      - area: OpenAI Service Integration
+        description: Full OpenAI API integration with feature parity
+        improvements:
+          - Implemented fetchTTSAudio using OpenAI TTS-1 model with "alloy" voice
+          - Implemented fetchWordAnnotation using GPT-4o-mini for definitions and IPA
+          - Implemented analyzePronunciation using Whisper-1 for transcription + GPT-4o-mini for analysis
+          - Complete localStorage caching system with separate cache space
+          - Cache keys prefixed with 'vocabflow_openai_' to avoid conflicts
+          - Supports up to 20 TTS entries and 500 annotation entries
+
+      - area: API Key Modal Enhancement
+        description: Updated modal to support provider selection
+        improvements:
+          - Added provider selection buttons (Gemini / OpenAI)
+          - Dynamic UI that adapts to selected provider
+          - Provider-specific help text and API key acquisition links
+          - Placeholder text changes based on provider
+          - Saves both API key and provider preference to localStorage
+
+      - area: App Component Updates
+        description: Enhanced state management for provider support
+        improvements:
+          - Added provider state management
+          - Loads provider preference from localStorage on mount
+          - Passes provider to all child components
+          - Updated warning messages to be provider-agnostic
+
+      - area: Reader Component Integration
+        description: Updated Reader to support multiple providers
+        improvements:
+          - Accepts provider prop in ReaderProps
+          - All API calls (TTS, annotation, pronunciation) pass provider parameter
+          - Cache clearing considers current provider
+          - Seamless switching between providers
+
+      - area: Dependencies
+        description: Added OpenAI SDK
+        improvements:
+          - Added openai@^6.13.0 package
+          - Configured with dangerouslyAllowBrowser for client-side usage
+          - Note: Production should use backend proxy for security
+
+      - area: Documentation
+        description: Created comprehensive provider support documentation
+        improvements:
+          - Added PROVIDER_SUPPORT.md with detailed implementation guide
+          - Documented model mappings (Gemini vs OpenAI)
+          - Explained caching mechanism differences
+          - Included security considerations and cost notes
+          - Provided usage instructions for both providers
+
+      - area: Technical Improvements
+        description: Code quality and maintainability enhancements
+        improvements:
+          - Abstracted provider-specific logic into separate services
+          - Consistent error handling across providers
+          - Type-safe provider parameter throughout the application
+          - Clean separation of concerns between UI and service layers
+
   - version: 0.9.0
     date: 2025-12-15
     commit: pending
