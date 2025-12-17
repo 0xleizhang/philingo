@@ -1,23 +1,48 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { Annotation } from '../types';
 
 interface WordTooltipProps {
   annotation: Annotation;
   isVisible: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
-export const WordTooltip: React.FC<WordTooltipProps> = ({ annotation, isVisible }) => {
+export const WordTooltip: React.FC<WordTooltipProps> = ({ annotation, isVisible, onMouseEnter, onMouseLeave }) => {
   const { t } = useLanguage();
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [showBelow, setShowBelow] = useState(false);
+
+  useEffect(() => {
+    if (isVisible && tooltipRef.current) {
+      const rect = tooltipRef.current.getBoundingClientRect();
+      // Check if tooltip would be cut off at the top
+      const spaceAbove = rect.top;
+      const tooltipHeight = rect.height;
+      
+      // If there's not enough space above (less than tooltip height + 20px buffer)
+      setShowBelow(spaceAbove < tooltipHeight + 20);
+    }
+  }, [isVisible]);
+
   return (
     <div 
+      ref={tooltipRef}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={`
-        absolute bottom-full left-0 mb-1 z-50 
-        transform transition-all duration-200 origin-bottom-left
-        ${isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2 pointer-events-none'}
+        absolute left-0 z-50 
+        transform transition-all duration-200
+        ${showBelow 
+          ? 'top-full mt-1 origin-top-left' 
+          : 'bottom-full mb-1 origin-bottom-left'
+        }
+        ${isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 pointer-events-none'}
+        ${showBelow ? (isVisible ? 'translate-y-0' : '-translate-y-2') : (isVisible ? 'translate-y-0' : 'translate-y-2')}
       `}
     >
-      <div className="bg-slate-800 text-white text-sm px-4 py-3 rounded-lg shadow-xl ring-1 ring-white/10 w-[min(85vw,400px)] md:w-[min(450px,90vw)]">
+      <div className="bg-slate-800 text-white text-sm px-4 py-3 rounded-lg shadow-xl ring-1 ring-white/10 w-[min(85vw,400px)] md:w-[min(450px,90vw)] select-text">
         {/* 英汉释义 */}
         <div className="font-medium text-base mb-2 text-white">
           {annotation.definition}
@@ -100,7 +125,11 @@ export const WordTooltip: React.FC<WordTooltipProps> = ({ annotation, isVisible 
         )}
         
         {/* Tooltip Arrow */}
-        <div className="absolute top-full left-4 -translate-x-1/2 -mt-[4px] text-slate-800">
+        <div className={`absolute left-4 -translate-x-1/2 text-slate-800 ${
+          showBelow 
+            ? 'bottom-full -mb-[4px]' 
+            : 'top-full -mt-[4px]'
+        }`}>
           <div className="w-2 h-2 bg-slate-800 transform rotate-45"></div>
         </div>
       </div>

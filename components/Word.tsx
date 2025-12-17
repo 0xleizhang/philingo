@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { playPronunciation } from '../services/ttsService';
 import { InteractionMode, WordError, WordToken } from '../types';
 import { WordTooltip } from './WordTooltip';
@@ -15,9 +15,14 @@ interface WordProps {
 
 export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = false, interactionMode, onHoverSentence, pronunciationError }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle sentence hover in listen/pronounce mode
   const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
     setIsHovered(true);
     if ((interactionMode === 'listen' || interactionMode === 'pronounce') && onHoverSentence) {
       onHoverSentence(token.sentenceIndex);
@@ -25,10 +30,25 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
   };
 
   const handleMouseLeave = () => {
-    setIsHovered(false);
-    if ((interactionMode === 'listen' || interactionMode === 'pronounce') && onHoverSentence) {
-      onHoverSentence(null);
+    // Delay hiding to allow mouse to move to tooltip
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+      if ((interactionMode === 'listen' || interactionMode === 'pronounce') && onHoverSentence) {
+        onHoverSentence(null);
+      }
+    }, 100);
+  };
+
+  const handleTooltipMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
     }
+    setIsHovered(true);
+  };
+
+  const handleTooltipMouseLeave = () => {
+    setIsHovered(false);
   };
 
   // Helper booleans
@@ -117,7 +137,12 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
 
       {/* Hover Tooltip - Using WordTooltip Component */}
       {isAnnotated && token.annotation && interactionMode === 'read' && (
-        <WordTooltip annotation={token.annotation} isVisible={isHovered} />
+        <WordTooltip 
+          annotation={token.annotation} 
+          isVisible={isHovered}
+          onMouseEnter={handleTooltipMouseEnter}
+          onMouseLeave={handleTooltipMouseLeave}
+        />
       )}
     </span>
   );
