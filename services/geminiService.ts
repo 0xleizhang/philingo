@@ -1,5 +1,7 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { Language } from '../i18n/translations';
 import { Annotation, PronunciationFeedback, WordError } from '../types';
+import { getTargetLanguageCode } from './i18nService';
 
 // Base64 decode helper for audio data
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -387,7 +389,7 @@ export const clearAnnotationCache = () => {
   console.log("Annotation cache cleared");
 };
 
-export const fetchWordAnnotation = async (word: string, contextSentence: string, apiKey: string): Promise<Annotation> => {
+export const fetchWordAnnotation = async (word: string, contextSentence: string, apiKey: string, language: Language = 'zh'): Promise<Annotation> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
   }
@@ -403,15 +405,24 @@ export const fetchWordAnnotation = async (word: string, contextSentence: string,
   const ai = new GoogleGenAI({ apiKey });
 
   try {
+    const targetLang = getTargetLanguageCode(language);
     const prompt = `
-      Analyze the English word "${word}".
-      Context: "${contextSentence}".
+      Analyze the English word "${word}" in context: "${contextSentence}".
 
-      Provide:
-      1. The IPA phonetic transcription (British or American general).
-      2. A concise Chinese definition (max 10 chars) suitable for this context.
+      Provide comprehensive information in ${targetLang}:
+      1. IPA phonetic transcription (British or American)
+      2. Concise definition in ${targetLang} (max 10 chars) for this context
+      3. English dictionary definition (concise, 1 sentence)
+      4. Syllable breakdown (e.g., "hel-lo", "com-mu-ni-ca-tion")
+      5. Word roots (e.g., "dict (say, speak)") - provide in ${targetLang}
+      6. Affixes (e.g., "pre- (before), -ion (noun suffix)") - provide in ${targetLang}
+      7. 2-4 synonyms (if any)
+      8. Synonym analysis in ${targetLang} (brief explanation of differences, if applicable)
+      9. Antonyms (optional, if clear antonyms exist)
+      10. Associated words for memory (optional, thematically related words)
+      11. Common phrases (optional, 2-3 common collocations or phrases)
 
-      Return as JSON.
+      Return complete JSON. Use empty string "" for missing text fields, empty array [] for missing list fields.
     `;
 
     const response = await ai.models.generateContent({
@@ -422,10 +433,35 @@ export const fetchWordAnnotation = async (word: string, contextSentence: string,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            ipa: { type: Type.STRING, description: "IPA phonetic transcription, e.g., /həˈləʊ/" },
+            ipa: { type: Type.STRING, description: "IPA phonetic transcription" },
             definition: { type: Type.STRING, description: "Concise Chinese definition" },
+            definitionEn: { type: Type.STRING, description: "English dictionary definition" },
+            syllables: { type: Type.STRING, description: "Syllable breakdown" },
+            roots: { type: Type.STRING, description: "Word roots" },
+            affixes: { type: Type.STRING, description: "Prefixes and suffixes" },
+            synonyms: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "List of synonyms" 
+            },
+            synonymAnalysis: { type: Type.STRING, description: "Synonym analysis in Chinese" },
+            antonyms: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "List of antonyms" 
+            },
+            associations: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "Associated words for memory" 
+            },
+            phrases: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "Common phrases or collocations" 
+            },
           },
-          required: ["ipa", "definition"],
+          required: ["ipa", "definition", "definitionEn", "syllables", "roots", "affixes", "synonyms", "synonymAnalysis", "antonyms", "associations", "phrases"],
         }
       }
     });
@@ -465,7 +501,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export const analyzePronunciation = async (
   audioBlob: Blob,
   originalText: string,
-  apiKey: string
+  apiKey: string,
+  language: Language = 'zh'
 ): Promise<PronunciationFeedback> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
@@ -478,16 +515,17 @@ export const analyzePronunciation = async (
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64Audio = arrayBufferToBase64(arrayBuffer);
 
+    const targetLang = getTargetLanguageCode(language);
     const prompt = `You are an English pronunciation coach. Listen to this audio recording where a student reads the following text:
 
 "${originalText}"
 
 Analyze the pronunciation and provide feedback in JSON format with:
 1. score: A number from 0-100 rating the overall pronunciation quality
-2. feedback: A brief overall comment in Chinese (1-2 sentences)
+2. feedback: A brief overall comment in ${targetLang} (1-2 sentences)
 3. errors: An array of words that had pronunciation issues, each with:
    - word: the mispronounced word (must match exactly a word in the original text)
-   - issue: a brief description of the issue in Chinese (e.g., "元音发音不准", "重音位置错误", "尾音不清晰")
+   - issue: a brief description of the issue in ${targetLang} (e.g., for Chinese: "元音发音不准", "重音位置错误", "尾音不清晰")
 
 Be encouraging but honest. If the pronunciation is good, return an empty errors array.
 Focus on significant errors that affect comprehension.`;

@@ -3,7 +3,9 @@ import { BookOpen, Check, Compass, Edit3, Info, KeyRound, Link, MessageCircle, S
 import { useCallback, useEffect, useState } from 'react';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { Button } from './components/Button';
+import { LanguageSelector } from './components/LanguageSelector';
 import { Reader } from './components/Reader';
+import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { LLMProvider, ViewMode } from './types';
 
 // Compress text using base64 encoding (works for most text)
@@ -51,11 +53,15 @@ Start your English learning journey today with Philingo - where technology meets
 
 const STORAGE_KEY_TEXT = 'vocabflow_input_text';
 const STORAGE_KEY_HISTORY = 'philingo_text_history';
+const STORAGE_KEY_API_KEY_GEMINI = 'philingo_api_key_gemini';
+const STORAGE_KEY_API_KEY_OPENAI = 'philingo_api_key_openai';
+const STORAGE_KEY_CURRENT_PROVIDER = 'philingo_current_provider';
 
-export default function App() {
+function AppContent() {
   // Track if text came from URL (should not be saved to localStorage)
   const [isFromUrl, setIsFromUrl] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const { t } = useLanguage();
 
   const [text, setText] = useState<string>(() => {
     // Check URL parameter first
@@ -145,18 +151,34 @@ export default function App() {
 
   // Load key and provider from localStorage on mount
   useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key');
-    const storedProvider = localStorage.getItem('llm_provider') as LLMProvider | null;
-    if (storedKey) {
-      setApiKey(storedKey);
-    }
+    const storedProvider = localStorage.getItem(STORAGE_KEY_CURRENT_PROVIDER) as LLMProvider | null;
+    
+    // Set provider first
     if (storedProvider && (storedProvider === 'gemini' || storedProvider === 'openai')) {
       setProvider(storedProvider);
+      // Load the corresponding API key
+      const keyToLoad = storedProvider === 'gemini' 
+        ? localStorage.getItem(STORAGE_KEY_API_KEY_GEMINI)
+        : localStorage.getItem(STORAGE_KEY_API_KEY_OPENAI);
+      if (keyToLoad) {
+        setApiKey(keyToLoad);
+      }
     } else {
-        // Optional: Open modal immediately if no key is found
-        // setIsKeyModalOpen(true);
+      // Default to gemini
+      const geminiKey = localStorage.getItem(STORAGE_KEY_API_KEY_GEMINI);
+      if (geminiKey) {
+        setApiKey(geminiKey);
+      }
     }
   }, []);
+
+  // Load corresponding API key when provider changes
+  useEffect(() => {
+    const keyToLoad = provider === 'gemini'
+      ? localStorage.getItem(STORAGE_KEY_API_KEY_GEMINI)
+      : localStorage.getItem(STORAGE_KEY_API_KEY_OPENAI);
+    setApiKey(keyToLoad || '');
+  }, [provider]);
 
   // Create share link
   const handleCreateLink = useCallback(async () => {
@@ -176,8 +198,12 @@ export default function App() {
   }, [text]);
 
   const handleSaveKey = (key: string, selectedProvider: LLMProvider) => {
-    localStorage.setItem('gemini_api_key', key);
-    localStorage.setItem('llm_provider', selectedProvider);
+    // Save to the corresponding provider's storage key
+    const storageKey = selectedProvider === 'gemini' 
+      ? STORAGE_KEY_API_KEY_GEMINI 
+      : STORAGE_KEY_API_KEY_OPENAI;
+    localStorage.setItem(storageKey, key);
+    localStorage.setItem(STORAGE_KEY_CURRENT_PROVIDER, selectedProvider);
     setApiKey(key);
     setProvider(selectedProvider);
   };
@@ -263,7 +289,7 @@ export default function App() {
               <span className="absolute -bottom-0.5 -right-0.5 text-[8px] font-bold text-brand-700">Ph</span>
             </div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Philingo</h1>
-            <span className="text-sm text-slate-400 font-normal italic hidden sm:inline">— practice makes perfect</span>
+            <span className="text-sm text-slate-400 font-normal italic hidden sm:inline">{t.app.tagline}</span>
           </a>
           
           <div className="flex items-center space-x-3">
@@ -271,7 +297,7 @@ export default function App() {
              <a
                 href="/explore.html"
                 className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"
-                title="Explore Texts"
+                title={t.app.explore}
              >
                 <Compass size={20} />
              </a>
@@ -281,7 +307,7 @@ export default function App() {
                 href="/about.html"
                 target="_blank"
                 className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"
-                title="About"
+                title={t.app.about}
              >
                 <Info size={20} />
              </a>
@@ -290,7 +316,7 @@ export default function App() {
              <button
                 onClick={() => setIsKeyModalOpen(true)}
                 className={`p-2 rounded-full transition-colors ${!apiKey ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'text-slate-500 hover:bg-slate-100'}`}
-                title="Configure API Key"
+                title={t.app.configureApiKey}
              >
                 {!apiKey ? <KeyRound size={20} className="animate-pulse" /> : <Settings size={20} />}
              </button>
@@ -304,7 +330,7 @@ export default function App() {
                      ? 'bg-green-100 text-green-600'
                      : 'text-slate-500 hover:bg-slate-100'
                  }`}
-                 title={linkCopied ? 'Link Copied!' : 'Create Share Link'}
+                 title={linkCopied ? t.app.linkCopied : t.app.createLink}
                >
                  {linkCopied ? <Check size={20} /> : <Link size={20} />}
                </button>
@@ -320,18 +346,18 @@ export default function App() {
                     setInputText(text);
                     setMode('edit');
                 }}
+                title={t.app.editText}
               >
-                <Edit3 className="w-4 h-4 mr-2" />
-                Edit Text
+                <Edit3 className="w-4 h-4" />
               </Button>
             ) : (
                 <div className="flex space-x-2">
                      <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
-                        Cancel
+                        {t.app.cancel}
                      </Button>
                      <Button variant="primary" size="sm" onClick={handleSaveText}>
                         <BookOpen className="w-4 h-4 mr-2" />
-                        Start Reading
+                        {t.app.startReading}
                      </Button>
                 </div>
             )}
@@ -349,7 +375,7 @@ export default function App() {
           {apiStatus.error && (
             <div className="bg-red-50 border-b border-red-200 px-4 py-2">
               <p className="text-xs text-red-700 text-center">
-                <span className="font-semibold">Error:</span> {apiStatus.error}
+                <span className="font-semibold">{t.app.errorPrefix}:</span> {apiStatus.error}
               </p>
             </div>
           )}
@@ -364,12 +390,12 @@ export default function App() {
                     <div className="flex items-center gap-3">
                         <KeyRound className="text-amber-500" />
                         <div>
-                            <p className="text-sm font-medium text-amber-900">API Key Required</p>
-                            <p className="text-xs text-amber-700">You need to configure your API Key to use the analysis features.</p>
+                            <p className="text-sm font-medium text-amber-900">{t.app.apiKeyRequired}</p>
+                            <p className="text-xs text-amber-700">{t.app.apiKeyRequiredDesc}</p>
                         </div>
                     </div>
                     <Button size="sm" variant="secondary" onClick={() => setIsKeyModalOpen(true)}>
-                        Configure
+                        {t.app.configure}
                     </Button>
                 </div>
             )}
@@ -377,7 +403,7 @@ export default function App() {
             {mode === 'edit' ? (
                 <div className="bg-white rounded-xl shadow-sm p-6 max-w-3xl mx-auto animate-in fade-in duration-300">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold text-slate-900">Input English Text</h2>
+                        <h2 className="text-lg font-semibold text-slate-900">{t.app.inputTitle}</h2>
                         <Button 
                             size="sm" 
                             variant="secondary"
@@ -401,18 +427,18 @@ export default function App() {
                                 setInputText(formatted);
                             }}
                         >
-                            Format
+                            {t.app.format}
                         </Button>
                     </div>
                     <textarea
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
-                        placeholder="Paste your English text here..."
+                        placeholder={t.app.inputPlaceholder}
                         className="w-full h-[600px] p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-serif text-lg leading-relaxed resize-none"
                     />
                     <div className="mt-4 flex justify-between items-center text-slate-500 text-sm">
-                        <span>Paste an article, a paragraph, or sentences to practice.</span>
-                        <span>{inputText.length} chars</span>
+                        <span>{t.app.inputHint}</span>
+                        <span>{inputText.length} {t.app.chars}</span>
                     </div>
                 </div>
             ) : (
@@ -430,7 +456,16 @@ export default function App() {
             )}
         </div>
       </main>
+      <LanguageSelector />
       <Analytics />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }

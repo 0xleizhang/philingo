@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import React, { useState } from 'react';
 import { playPronunciation } from '../services/ttsService';
 import { InteractionMode, WordError, WordToken } from '../types';
+import { WordTooltip } from './WordTooltip';
 
 interface WordProps {
   token: WordToken;
@@ -114,23 +115,9 @@ export const Word: React.FC<WordProps> = ({ token, onClick, isHighlighted = fals
         </span>
       )}
 
-      {/* Hover Tooltip - Definition Only */}
+      {/* Hover Tooltip - Using WordTooltip Component */}
       {isAnnotated && token.annotation && interactionMode === 'read' && (
-        <div 
-          className={`
-            absolute bottom-full left-0 mb-1 z-50 whitespace-nowrap
-            transform transition-all duration-200 origin-bottom-left
-            ${isHovered ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2 pointer-events-none'}
-          `}
-        >
-          <div className="bg-slate-800 text-white text-sm px-3 py-1.5 rounded-lg shadow-xl ring-1 ring-white/10">
-            {token.annotation.definition}
-             {/* Tooltip Arrow */}
-            <div className="absolute top-full left-4 -translate-x-1/2 -mt-[4px] text-slate-800">
-                <div className="w-2 h-2 bg-slate-800 transform rotate-45"></div>
-            </div>
-          </div>
-        </div>
+        <WordTooltip annotation={token.annotation} isVisible={isHovered} />
       )}
     </span>
   );

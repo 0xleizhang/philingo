@@ -1,3 +1,4 @@
+import { Language } from '../i18n/translations';
 import { Annotation, LLMProvider, PronunciationFeedback } from '../types';
 import * as geminiService from './geminiService';
 import * as openaiService from './openaiService';
@@ -30,12 +31,13 @@ export const fetchWordAnnotation = async (
   word: string,
   contextSentence: string,
   apiKey: string,
-  provider: LLMProvider
+  provider: LLMProvider,
+  language: Language = 'zh'
 ): Promise<Annotation> => {
   if (provider === 'openai') {
-    return openaiService.fetchWordAnnotation(word, contextSentence, apiKey);
+    return openaiService.fetchWordAnnotation(word, contextSentence, apiKey, language);
   } else {
-    return geminiService.fetchWordAnnotation(word, contextSentence, apiKey);
+    return geminiService.fetchWordAnnotation(word, contextSentence, apiKey, language);
   }
 };
 
@@ -46,12 +48,13 @@ export const analyzePronunciation = async (
   audioBlob: Blob,
   originalText: string,
   apiKey: string,
-  provider: LLMProvider
+  provider: LLMProvider,
+  language: Language = 'zh'
 ): Promise<PronunciationFeedback> => {
   if (provider === 'openai') {
-    return openaiService.analyzePronunciation(audioBlob, originalText, apiKey);
+    return openaiService.analyzePronunciation(audioBlob, originalText, apiKey, language);
   } else {
-    return geminiService.analyzePronunciation(audioBlob, originalText, apiKey);
+    return geminiService.analyzePronunciation(audioBlob, originalText, apiKey, language);
   }
 };
 

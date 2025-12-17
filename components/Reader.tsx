@@ -1,7 +1,8 @@
 import { Ear, FastForward, Languages, Loader2, Mic, Pause, PenLine, Play, Repeat, Rewind, SkipForward, Square } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import { audioRecorder } from '../services/audioRecordingService';
-import { analyzePronunciation, clearTTSCache, fetchTTSAudio, fetchWordAnnotation } from '../services/llmService';
+import { analyzePronunciation, fetchTTSAudio, fetchWordAnnotation } from '../services/llmService';
 import { addLookedUpWord } from '../services/wordMasteryService';
 import { InteractionMode, LLMProvider, PronunciationFeedback, WordError, WordToken } from '../types';
 import { FeedbackPanel } from './FeedbackPanel';
@@ -20,6 +21,7 @@ interface ReaderProps {
 
 export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMissingKey, onApiStart, onApiSuccess, onApiError }) => {
   const [tokens, setTokens] = useState<WordToken[]>([]);
+  const { language } = useLanguage();
   
   // Playback State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -101,7 +103,6 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
     setTokens(newTokens);
     setSentences(finalSentences);
     stopPlayback(); // Reset playback if text changes
-    clearTTSCache(provider); // Clear audio cache when text changes
   }, [rawText, provider]);
 
   // --- Playback Logic ---
@@ -300,6 +301,8 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
   }, []);
 
   // --- Pronounce Mode Handler ---
+  const cancelAnalysisRef = useRef(false);
+
   const handleTestModeClick = useCallback(async (sentenceIndex: number) => {
     if (!apiKey) {
       onMissingKey();
@@ -329,10 +332,19 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
 
       // 4. Analyze pronunciation
       setIsAnalyzing(true);
+      cancelAnalysisRef.current = false; // Reset cancel flag
 
       onApiStart?.('Analyzing pronunciation');
-      const feedback = await analyzePronunciation(audioBlob, sentenceText, apiKey, provider);
+      const feedback = await analyzePronunciation(audioBlob, sentenceText, apiKey, provider, language);
       onApiSuccess?.();
+
+      // Check if analysis was cancelled before adding feedback
+      if (cancelAnalysisRef.current) {
+        console.log("Analysis cancelled, not adding feedback");
+        URL.revokeObjectURL(audioUrl); // Clean up audio URL
+        setIsAnalyzing(false);
+        return;
+      }
 
       // 5. Add feedback to list with audio URL (newest first)
       setFeedbackList(prev => [{ ...feedback, audioUrl }, ...prev]);
@@ -365,7 +377,13 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
       setIsRecording(false);
       setIsAnalyzing(false);
     }
-  }, [apiKey, onMissingKey, isRecording, isAnalyzing, sentences, tokens, pronunciationErrors, onApiStart, onApiSuccess, onApiError]);
+  }, [apiKey, onMissingKey, isRecording, isAnalyzing, sentences, tokens, pronunciationErrors, onApiStart, onApiSuccess, onApiError, provider]);
+
+  // Cancel analysis handler
+  const handleCancelAnalysis = useCallback(() => {
+    cancelAnalysisRef.current = true;
+    setIsAnalyzing(false);
+  }, []);
 
   // --- Combined Click Handler ---
   const handleWordClick = useCallback(async (e: React.MouseEvent, tokenIndex: number) => {
@@ -426,7 +444,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
       const contextString = tokens.slice(start, end).map(t => t.text).join('');
 
       onApiStart?.('Looking up word definition');
-      const annotation = await fetchWordAnnotation(token.text, contextString, apiKey, provider);
+      const annotation = await fetchWordAnnotation(token.text, contextString, apiKey, provider, language);
       onApiSuccess?.();
 
       // Save to word mastery for writing mode
@@ -525,7 +543,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
         {/* Main Text Area */}
         <div className={`p-4 md:p-8 bg-white shadow-sm rounded-xl min-h-[50vh] relative ${interactionMode === 'pronounce' ? 'flex-1' : 'w-full'}`}>
           <div className="prose prose-lg prose-slate max-w-none font-serif leading-loose text-slate-800">
-            <p className="whitespace-pre-wrap">
+            <div className="whitespace-pre-wrap">
             {tokens.map((token, index) => {
               const isSentenceActive = token.sentenceIndex === currentSentenceIndex;
               const isSentenceHovered = (interactionMode === 'listen' || interactionMode === 'pronounce') && token.sentenceIndex === hoveredSentenceIndex;
@@ -559,7 +577,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
                 />
               );
             })}
-          </p>
+          </div>
         </div>
         
         <div className="mt-8 pt-4 border-t border-slate-100 text-center text-sm text-slate-400 font-sans">
@@ -584,7 +602,7 @@ export const Reader: React.FC<ReaderProps> = ({ rawText, apiKey, provider, onMis
                 分析发音中...
               </span>
               <button
-                onClick={() => setIsAnalyzing(false)}
+                onClick={handleCancelAnalysis}
                 className="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
               >
                 取消

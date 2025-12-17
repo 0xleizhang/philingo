@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
+import { Language } from '../i18n/translations';
 import { Annotation, PronunciationFeedback, WordError } from '../types';
+import { getTargetLanguageCode } from './i18nService';
 
 // TTS audio result type
 export interface TTSAudioResult {
@@ -295,7 +297,8 @@ export const clearAnnotationCache = () => {
 export const fetchWordAnnotation = async (
   word: string,
   contextSentence: string,
-  apiKey: string
+  apiKey: string,
+  language: Language = 'zh'
 ): Promise<Annotation> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
@@ -313,14 +316,23 @@ export const fetchWordAnnotation = async (
   });
 
   try {
-    const prompt = `Analyze the English word "${word}".
-Context: "${contextSentence}".
+    const targetLang = getTargetLanguageCode(language);
+    const prompt = `Analyze the English word "${word}" in context: "${contextSentence}".
 
-Provide:
-1. The IPA phonetic transcription (British or American general).
-2. A concise Chinese definition (max 10 chars) suitable for this context.
+Provide comprehensive information in ${targetLang}:
+1. IPA phonetic transcription (British or American)
+2. Concise definition in ${targetLang} (max 10 chars) for this context
+3. English dictionary definition (concise, 1 sentence)
+4. Syllable breakdown (e.g., "hel-lo", "com-mu-ni-ca-tion")
+5. Word roots (e.g., "dict (say, speak)") - provide in ${targetLang}
+6. Affixes (e.g., "pre- (before), -ion (noun suffix)") - provide in ${targetLang}
+7. 2-4 synonyms (if any)
+8. Synonym analysis in ${targetLang} (brief explanation of differences, if applicable)
+9. Antonyms (optional, if clear antonyms exist)
+10. Associated words for memory (optional, thematically related words)
+11. Common phrases (optional, 2-3 common collocations or phrases)
 
-Return as JSON with fields: ipa, definition`;
+Return complete JSON. Use empty string "" for missing text fields, empty array [] for missing list fields.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -330,7 +342,68 @@ Return as JSON with fields: ipa, definition`;
           content: prompt
         }
       ],
-      response_format: { type: "json_object" }
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "word_annotation",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              ipa: {
+                type: "string",
+                description: "IPA phonetic transcription"
+              },
+              definition: {
+                type: "string",
+                description: "Concise Chinese definition"
+              },
+              definitionEn: {
+                type: "string",
+                description: "English dictionary definition"
+              },
+              syllables: {
+                type: "string",
+                description: "Syllable breakdown"
+              },
+              roots: {
+                type: "string",
+                description: "Word roots"
+              },
+              affixes: {
+                type: "string",
+                description: "Prefixes and suffixes"
+              },
+              synonyms: {
+                type: "array",
+                items: { type: "string" },
+                description: "List of synonyms"
+              },
+              synonymAnalysis: {
+                type: "string",
+                description: "Synonym analysis in Chinese"
+              },
+              antonyms: {
+                type: "array",
+                items: { type: "string" },
+                description: "List of antonyms"
+              },
+              associations: {
+                type: "array",
+                items: { type: "string" },
+                description: "Associated words for memory"
+              },
+              phrases: {
+                type: "array",
+                items: { type: "string" },
+                description: "Common phrases or collocations"
+              }
+            },
+            required: ["ipa", "definition", "definitionEn", "syllables", "roots", "affixes", "synonyms", "synonymAnalysis", "antonyms", "associations", "phrases"],
+            additionalProperties: false
+          }
+        }
+      }
     });
 
     const jsonText = response.choices[0]?.message?.content;
@@ -354,7 +427,8 @@ Return as JSON with fields: ipa, definition`;
 export const analyzePronunciation = async (
   audioBlob: Blob,
   originalText: string,
-  apiKey: string
+  apiKey: string,
+  language: Language = 'zh'
 ): Promise<PronunciationFeedback> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
@@ -375,6 +449,7 @@ export const analyzePronunciation = async (
     const transcribedText = transcription.text;
 
     // Then, use GPT to analyze pronunciation
+    const targetLang = getTargetLanguageCode(language);
     const prompt = `You are an English pronunciation coach. The student was supposed to read:
 "${originalText}"
 
@@ -383,10 +458,10 @@ But they actually said:
 
 Analyze the pronunciation and provide feedback in JSON format with:
 1. score: A number from 0-100 rating the overall pronunciation quality
-2. feedback: A brief overall comment in Chinese (1-2 sentences)
+2. feedback: A brief overall comment in ${targetLang} (1-2 sentences)
 3. errors: An array of words that had pronunciation issues, each with:
    - word: the mispronounced word (must match exactly a word in the original text)
-   - issue: a brief description of the issue in Chinese (e.g., "元音发音不准", "重音位置错误", "尾音不清晰")
+   - issue: a brief description of the issue in ${targetLang}
 
 Be encouraging but honest. If the pronunciation is good, return an empty errors array.`;
 
@@ -398,7 +473,47 @@ Be encouraging but honest. If the pronunciation is good, return an empty errors 
           content: prompt
         }
       ],
-      response_format: { type: "json_object" }
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "pronunciation_feedback",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              score: {
+                type: "number",
+                description: "Pronunciation quality score from 0-100"
+              },
+              feedback: {
+                type: "string",
+                description: "Overall feedback comment in Chinese"
+              },
+              errors: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    word: {
+                      type: "string",
+                      description: "The mispronounced word"
+                    },
+                    issue: {
+                      type: "string",
+                      description: "Description of the pronunciation issue in Chinese"
+                    }
+                  },
+                  required: ["word", "issue"],
+                  additionalProperties: false
+                },
+                description: "Array of pronunciation errors"
+              }
+            },
+            required: ["score", "feedback", "errors"],
+            additionalProperties: false
+          }
+        }
+      }
     });
 
     const jsonText = response.choices[0]?.message?.content;

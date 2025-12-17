@@ -2,7 +2,17 @@ export type LLMProvider = 'gemini' | 'openai';
 
 export interface Annotation {
   ipa: string;
-  definition: string;
+  definition: string;  // 英汉释义
+  definitionEn?: string;  // 英英释义
+  syllables?: string;  // 音节拆分，例如: "hel-lo"
+  roots?: string;  // 词根
+  affixes?: string;  // 词缀
+  etymology?: string;  // 词源（保留用于向后兼容）
+  synonyms?: string[];  // 近义词列表
+  synonymAnalysis?: string;  // 近义词辨析
+  antonyms?: string[];  // 反义词（optional）
+  associations?: string[];  // 联想词（optional）
+  phrases?: string[];  // 常用词组（optional）
 }
 
 export interface WordToken {

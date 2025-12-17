@@ -1,5 +1,6 @@
 import { AlertCircle, Play, Square, Trash2, TrendingUp } from 'lucide-react';
 import React, { useRef, useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import { PronunciationFeedback } from '../types';
 
 interface FeedbackPanelProps {
@@ -22,6 +23,7 @@ const getScoreBorderColor = (score: number): string => {
 export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onClear }) => {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { t } = useLanguage();
 
   const handleSpeakWord = (word: string) => {
     const synth = window.speechSynthesis;
@@ -84,10 +86,10 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onCl
       <div className="h-full flex flex-col items-center justify-center text-slate-400 p-6">
         <TrendingUp size={48} className="mb-4 opacity-50" />
         <p className="text-center text-sm">
-          点击左侧句子开始测试发音
+          {t.feedbackPanel.emptyTitle}
         </p>
         <p className="text-center text-xs mt-2 opacity-75">
-          录音将自动结束
+          {t.feedbackPanel.emptySubtitle}
         </p>
       </div>
     );
@@ -97,11 +99,11 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onCl
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
-        <h3 className="font-semibold text-slate-700 text-sm">发音反馈</h3>
+        <h3 className="font-semibold text-slate-700 text-sm">{t.feedbackPanel.title}</h3>
         <button
           onClick={onClear}
           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-          title="清除所有反馈"
+          title={t.feedbackPanel.clearAll}
         >
           <Trash2 size={16} />
         </button>
@@ -126,7 +128,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onCl
                         ? 'bg-white/50 text-current'
                         : 'hover:bg-white/30 text-current/70 hover:text-current'
                     }`}
-                    title={playingId === feedback.id ? "停止播放" : "播放录音"}
+                    title={playingId === feedback.id ? t.feedbackPanel.stopPlaying : t.feedbackPanel.playRecording}
                   >
                     {playingId === feedback.id ? (
                       <Square size={14} fill="currentColor" />
@@ -156,7 +158,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onCl
                 <div className="pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-1 text-xs text-red-500 mb-1.5">
                     <AlertCircle size={12} />
-                    <span>需要注意</span>
+                    <span>{t.feedbackPanel.needsAttention}</span>
                   </div>
                   <div className="space-y-1">
                     {feedback.errors.map((error, errIndex) => (
@@ -164,7 +166,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({ feedbackList, onCl
                         <button
                           onClick={() => handleSpeakWord(error.word)}
                           className="font-mono font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded hover:bg-red-100 transition-colors cursor-pointer"
-                          title="点击发音"
+                          title={t.feedbackPanel.clickToPronounce}
                         >
                           {error.word}
                         </button>
