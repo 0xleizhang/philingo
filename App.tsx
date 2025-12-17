@@ -1,7 +1,7 @@
 import { Analytics } from '@vercel/analytics/react';
 import { BookOpen, Check, Compass, Edit3, Info, KeyRound, Link, MessageCircle, Settings } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { ApiKeyModal } from './components/ApiKeyModal';
+import { ApiKeyModal, ApiProvider } from './components/ApiKeyModal';
 import { Button } from './components/Button';
 import { LanguageSelector } from './components/LanguageSelector';
 import { Reader } from './components/Reader';
@@ -95,7 +95,7 @@ function AppContent() {
 
   // API Key State
   const [apiKey, setApiKey] = useState<string>('');
-  const [provider, setProvider] = useState<LLMProvider>('gemini');
+  const [apiProvider, setApiProvider] = useState<ApiProvider>('gemini');
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
   // API Status State
@@ -150,19 +150,16 @@ function AppContent() {
   }, []);
 
   // Load key and provider from localStorage on mount
+  // Load key and provider from localStorage on mount
   useEffect(() => {
-    const storedProvider = localStorage.getItem(STORAGE_KEY_CURRENT_PROVIDER) as LLMProvider | null;
+    const storedProvider = localStorage.getItem('api_provider') as ApiProvider | null;
+    if (storedProvider) {
+      setApiProvider(storedProvider);
+    }
     
-    // Set provider first
-    if (storedProvider && (storedProvider === 'gemini' || storedProvider === 'openai')) {
-      setProvider(storedProvider);
-      // Load the corresponding API key
-      const keyToLoad = storedProvider === 'gemini' 
-        ? localStorage.getItem(STORAGE_KEY_API_KEY_GEMINI)
-        : localStorage.getItem(STORAGE_KEY_API_KEY_OPENAI);
-      if (keyToLoad) {
-        setApiKey(keyToLoad);
-      }
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) {
+      setApiKey(storedKey);
     } else {
       // Default to gemini
       const geminiKey = localStorage.getItem(STORAGE_KEY_API_KEY_GEMINI);
@@ -197,15 +194,11 @@ function AppContent() {
     }
   }, [text]);
 
-  const handleSaveKey = (key: string, selectedProvider: LLMProvider) => {
-    // Save to the corresponding provider's storage key
-    const storageKey = selectedProvider === 'gemini' 
-      ? STORAGE_KEY_API_KEY_GEMINI 
-      : STORAGE_KEY_API_KEY_OPENAI;
-    localStorage.setItem(storageKey, key);
-    localStorage.setItem(STORAGE_KEY_CURRENT_PROVIDER, selectedProvider);
+  const handleSaveKey = (key: string, provider: ApiProvider) => {
+    localStorage.setItem('gemini_api_key', key);
+    localStorage.setItem('api_provider', provider);
     setApiKey(key);
-    setProvider(selectedProvider);
+    setApiProvider(provider);
   };
 
   const handleSaveText = () => {
@@ -277,7 +270,7 @@ function AppContent() {
         onClose={() => setIsKeyModalOpen(false)} 
         onSave={handleSaveKey}
         existingKey={apiKey}
-        existingProvider={provider}
+        existingProvider={apiProvider}
       />
 
       {/* Header */}

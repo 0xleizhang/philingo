@@ -4,23 +4,19 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { LLMProvider } from '../types';
 import { Button } from './Button';
 
+export type ApiProvider = 'gemini' | 'openai';
+
 interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (key: string, provider: LLMProvider) => void;
+  onSave: (key: string, provider: ApiProvider) => void;
   existingKey?: string;
-  existingProvider?: LLMProvider;
+  existingProvider?: ApiProvider;
 }
 
-export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  existingKey = '',
-  existingProvider = 'gemini'
-}) => {
+export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, existingKey = '', existingProvider = 'gemini' }) => {
   const [key, setKey] = useState(existingKey);
-  const [provider, setProvider] = useState<LLMProvider>(existingProvider);
+  const [provider, setProvider] = useState<ApiProvider>(existingProvider);
   const [showKey, setShowKey] = useState(false);
   const { t } = useLanguage();
 
@@ -29,22 +25,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setProvider(existingProvider);
   }, [existingKey, existingProvider, isOpen]);
 
-  // Load corresponding API key when provider changes
-  const handleProviderChange = (newProvider: LLMProvider) => {
-    setProvider(newProvider);
-    // Load the stored key for the new provider
-    const storageKey = newProvider === 'gemini' 
-      ? 'philingo_api_key_gemini' 
-      : 'philingo_api_key_openai';
-    const storedKey = localStorage.getItem(storageKey);
-    setKey(storedKey || '');
-  };
-
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (key.trim()) {
+      onSave(key.trim(), provider);
       onSave(key.trim(), provider);
       onClose();
     }
@@ -64,30 +50,29 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Provider Selection */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              {t.apiKeyModal.aiProvider}
+              API Provider
             </label>
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => handleProviderChange('gemini')}
-                className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+                onClick={() => setProvider('gemini')}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
                   provider === 'gemini'
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 Google Gemini
               </button>
               <button
                 type="button"
-                onClick={() => handleProviderChange('openai')}
-                className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+                onClick={() => setProvider('openai')}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
                   provider === 'openai'
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 OpenAI
@@ -95,10 +80,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
           </div>
 
-          {/* API Key Input */}
           <div className="space-y-2">
             <label htmlFor="apiKey" className="block text-sm font-medium text-slate-700">
-              {t.apiKeyModal.apiKeyLabel}
+              {provider === 'gemini' ? 'Google Gemini API Key' : 'OpenAI API Key'}
             </label>
             <div className="relative">
               <input
@@ -106,7 +90,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 type={showKey ? "text" : "password"}
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder={provider === 'gemini' ? 'AIzaSy...' : 'sk-proj-...'}
+                placeholder={provider === 'gemini' ? 'AIzaSy...' : 'sk-...'}
                 className="w-full pl-4 pr-10 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none font-mono text-sm"
                 autoFocus
               />
@@ -119,7 +103,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              {t.apiKeyModal.securityNote.replace('{provider}', provider === 'gemini' ? 'Google' : 'OpenAI')}
+              Your key is stored locally in your browser and sent directly to {provider === 'gemini' ? 'Google' : 'OpenAI'} servers.
             </p>
           </div>
 
@@ -127,7 +111,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg flex items-start gap-2">
             <ExternalLink className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <p>
-              {t.apiKeyModal.getKeyMessage}{' '}
+              Don't have a key? Get one at{' '}
               {provider === 'gemini' ? (
                 <a
                   href="https://aistudio.google.com/app/apikey"
